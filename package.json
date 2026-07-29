@@ -8,7 +8,7 @@
         "start": "tsc && node dist/index.js"
     },
     "type": "module",
-    "packageManager": "pnpm@11.17.0",
+    "packageManager": "pnpm@11.18.0",
     "devDependencies": {
         "@types/node": "^24.13.3",
         "typescript": "^7.0.2"
