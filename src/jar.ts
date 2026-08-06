@@ -1,5 +1,6 @@
 import {existsSync, readFileSync, unlinkSync, writeFileSync} from "node:fs";
 import {join} from "node:path";
+import {execSync} from "node:child_process";
 import got from "got";
 import {consola} from "consola";
 import {downloadFile, ensureDir} from "./util.js";
@@ -184,21 +185,62 @@ export async function ensureBouncyCastleJar(
         consola.success(`BouncyCastle jar ready: ${targetPath}`);
     }
 
-    // Generate java.security override that appends BC as a provider.
-    // Used with -Djava.security.properties== (double =, append mode).
-    // BC must NOT be provider 1 — it breaks SecureRandom initialization.
+    // Generate java.security override by copying JDK's default and appending BC.
+    // Using -Djava.security.properties= (override mode) with a complete file
+    // ensures all default providers (Sun, SunRsaSign, etc.) are preserved.
     const securityFile = join(jarCacheDir, "java.security.bc");
     if (!existsSync(securityFile)) {
-        writeFileSync(
-            securityFile,
-            [
-                "# Append BouncyCastle as the last provider (after standard JDK providers)",
-                "security.provider.14=org.bouncycastle.jce.provider.BouncyCastleProvider",
+        // Find JDK's java.security file
+        let javaHome: string;
+        try {
+            const out = execSync("java -XshowSettings:properties -version 2>&1", {encoding: "utf-8", timeout: 10000});
+            const match = out.match(/java\.home\s*=\s*(.+)/);
+            javaHome = match?.[1]?.trim() ?? "";
+        } catch {
+            javaHome = process.env.JAVA_HOME ?? "";
+        }
+
+        // Try both JDK 9+ (conf/security) and legacy (lib/security) paths
+        const defaultSecurityFile = join(javaHome, "conf", "security", "java.security");
+        let content = "";
+        if (existsSync(defaultSecurityFile)) {
+            content = readFileSync(defaultSecurityFile, "utf-8");
+            consola.success(`Loaded default java.security from ${defaultSecurityFile}`);
+        } else {
+            const legacyPath = join(javaHome, "lib", "security", "java.security");
+            if (existsSync(legacyPath)) {
+                content = readFileSync(legacyPath, "utf-8");
+                consola.success(`Loaded default java.security from ${legacyPath}`);
+            } else {
+                consola.warn(`Default java.security not found, using minimal config`);
+            }
+        }
+
+        // Find the last security.provider.N and append BC after it
+        const providerMatches = content.matchAll(/^security\.provider\.(\d+)=.*$/gm);
+        let maxProvider = 0;
+        for (const m of providerMatches) {
+            maxProvider = Math.max(maxProvider, parseInt(m[1] ?? "0", 10));
+        }
+
+        // If no providers found, add minimal defaults
+        if (maxProvider === 0) {
+            content += [
+                "security.provider.1=sun.security.provider.Sun",
+                "security.provider.2=sun.security.rsa.SunRsaSign",
+                "security.provider.3=sun.security.ec.SunEC",
+                "security.provider.4=com.sun.net.ssl.internal.ssl.Provider",
+                "security.provider.5=sun.security.jgss.SunProvider",
                 ""
-            ].join("\n"),
-            "utf-8"
-        );
-        consola.success(`java.security override generated: ${securityFile}`);
+            ].join("\n");
+            maxProvider = 5;
+        }
+
+        // Append BC as the last provider (must NOT be provider 1 — breaks SecureRandom)
+        content += `\nsecurity.provider.${maxProvider + 1}=org.bouncycastle.jce.provider.BouncyCastleProvider\n`;
+
+        writeFileSync(securityFile, content, "utf-8");
+        consola.success(`java.security override generated: ${securityFile} (BC as provider ${maxProvider + 1})`);
     }
 
     return targetPath;

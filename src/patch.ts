@@ -113,18 +113,18 @@ export async function patchApk(
 
     // Use -cp instead of -jar so BouncyCastle provider is on classpath.
     // NPatch uses BKS keystore which requires BC provider (not in standard JDK).
-    // Use == (append mode) so BC is added after standard JDK providers.
+    // Override java.security with complete file (default JDK providers + BC appended).
     const sep = process.platform === "win32" ? ";" : ":";
     const classpath = `${bcJar}${sep}${npatchJar}`;
     const securityFile = join(dirname(bcJar), "java.security.bc");
 
     consola.success(`Patching ${app.packageName} with NPatch...`);
-    consola.success(`java -Djava.security.properties==${securityFile} -cp "${classpath}" top.nkbe.npatch.patch.NPatch ${args.join(" ")}`);
+    consola.success(`java -Djava.security.properties=${securityFile} -cp "${classpath}" top.nkbe.npatch.patch.NPatch ${args.join(" ")}`);
 
     const result = await runCommand(
         "java",
         [
-            `-Djava.security.properties==${securityFile}`,
+            `-Djava.security.properties=${securityFile}`,
             "-cp", classpath,
             "top.nkbe.npatch.patch.NPatch",
             ...args
