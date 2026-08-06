@@ -1,22 +1,24 @@
 {
-    "name": "lspatch-generator",
+    "name": "npatch-generator",
     "version": "1.0.0",
-    "description": "",
-    "main": "index.js",
-    "scripts": {
-        "build": "tsc",
-        "start": "tsc && node dist/index.js"
-    },
     "type": "module",
     "packageManager": "pnpm@11.20.0",
+    "scripts": {
+        "start": "tsx src/index.ts",
+        "build": "tsc"
+    },
     "devDependencies": {
-        "@types/node": "^24.13.3",
+        "@types/adm-zip": "^0.5.8",
+        "@types/node": "^26.1.2",
+        "tsx": "^4.23.7",
         "typescript": "^7.0.2"
     },
     "dependencies": {
-        "cheerio": "1.2.0",
+        "adm-zip": "^0.6.0",
+        "consola": "^3.4.2",
+        "execa": "^10.0.1",
         "got": "^15.1.0",
         "p-limit": "^7.3.1",
-        "tough-cookie": "^6.0.2"
+        "patchright": "^1.61.1"
     }
 }
