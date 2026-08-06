@@ -45,8 +45,8 @@ jobs:
             -   name: Upload to Releases
                 uses: softprops/action-gh-release@v3
                 with:
-                    tag_name: ${{ github.run_id }}-$(date +'%Y%m%d')
-                    name: NPatch Build $(date +'%Y-%m-%d')
+                    tag_name: ${{ github.run_id }}
+                    name: NPatch Build ${{ github.run_id }}
                     files: build/*-npatched.apk
                     generate_release_notes: true
 
