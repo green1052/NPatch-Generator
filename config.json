@@ -15,24 +15,6 @@
                     "url": "https://tracker.vendetta.rocks"
                 }
             ]
-        },
-        {
-            "packageName": "com.dcinside.app.android",
-            "sources": [
-                {
-                    "type": "uptodown",
-                    "url": "https://dcinside.kr.uptodown.com/android"
-                }
-            ]
-        },
-        {
-            "packageName": "com.novelpia.android.me",
-            "sources": [
-                {
-                    "type": "uptodown",
-                    "url": "https://com-novelpia-android-me.kr.uptodown.com/android"
-                }
-            ]
         }
     ]
 }
