@@ -39,7 +39,7 @@ jobs:
                     key: patchright-chromium
 
             -   name: Cache jars
-                uses: actions/cache@v4
+                uses: actions/cache@v6
                 with:
                     path: bin
                     key: jars-${{ hashFiles('package.json') }}
