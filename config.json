@@ -1,23 +1,37 @@
 {
-    "embeds": {},
-    "applications": {
-        "com.novelpia.android.me": {
-            "sources": [
-                {
-                    "type": "apkpure",
-                    "url": "https://apkpure.com/kr/%EC%9B%B9%EC%86%8C%EC%84%A4-%EB%85%B8%EB%B2%A8%ED%94%BC%EC%95%84/com.novelpia.android.me"
-                }
-            ],
-            "manager": true
-        },
-        "com.dcinside.app.android": {
+    "outputDir": "build",
+    "jarCacheDir": "bin",
+    "npatchVersion": "latest",
+    "apkeditorVersion": "latest",
+    "bcVersion": "latest",
+    "concurrency": 3,
+    "apps": [
+        {
+            "packageName": "com.dcinside.app.android",
             "sources": [
                 {
                     "type": "uptodown",
                     "url": "https://dcinside.kr.uptodown.com/android"
                 }
-            ],
-            "manager": true
+            ]
+        },
+        {
+            "packageName": "com.novelpia.android.me",
+            "sources": [
+                {
+                    "type": "uptodown",
+                    "url": "https://com-novelpia-android-me.kr.uptodown.com/android"
+                }
+            ]
+        },
+        {
+            "packageName": "com.discord",
+            "sources": [
+                {
+                    "type": "uptodown",
+                    "url": "https://discord-chat-for-gamers.kr.uptodown.com/android"
+                }
+            ]
         }
-    }
+    ]
 }

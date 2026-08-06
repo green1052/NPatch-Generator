@@ -1,0 +1,170 @@
+import {join} from "node:path";
+import {type Browser, chromium, type Page} from "patchright";
+import {downloadFile} from "../util.js";
+import {consola} from "consola";
+import type {DownloadContext, DownloadResult} from "./types.js";
+
+interface UptodownVersionEntry {
+    version: string;
+    /** Download page URL: {data-url}/{data-extra-url}/{data-version-id} */
+    downloadPageUrl: string;
+    isXapk: boolean;
+}
+
+/**
+ * Scrape Uptodown versions page.
+ * Uses #versions-items-list container with data attributes.
+ */
+async function scrapeUptodownVersions(
+    page: Page,
+    versionsUrl: string
+): Promise<UptodownVersionEntry[]> {
+    consola.success(`Uptodown: fetching versions from ${versionsUrl}`);
+    await page.goto(versionsUrl, {waitUntil: "networkidle", timeout: 60000});
+    await page.waitForTimeout(5000);
+
+    const versions = await page.evaluate(() => {
+        const list = document.querySelector("#versions-items-list");
+        if (!list) return [];
+        const items = Array.from(list.children).map((el) => {
+            const ds = el as HTMLElement;
+            const version = el.querySelector(".version")?.textContent?.trim() ?? "";
+            const typeEl = el.querySelector(".type");
+            const isXapk = /xapk/i.test(typeEl?.className ?? "") ||
+                /xapk/i.test(typeEl?.getAttribute("title") ?? "");
+            const url = ds.dataset.url ?? "";
+            const versionId = ds.dataset.versionId ?? "";
+            const extraUrl = ds.dataset.extraUrl ?? "download";
+            // Construct download page URL
+            const downloadPageUrl = `${url}/${extraUrl}/${versionId}`;
+            return {version, downloadPageUrl, isXapk};
+        });
+        return items.filter((i) => i.version && i.downloadPageUrl);
+    });
+
+    return versions;
+}
+
+/**
+ * Navigate to a version's download page and resolve the final APK/XAPK URL.
+ * Clicks the download button and intercepts the AJAX response (POST with CSRF token).
+ */
+async function resolveDownloadUrl(
+    page: Page,
+    downloadPageUrl: string
+): Promise<{ url: string; isXapk: boolean } | null> {
+    consola.success(`Uptodown: resolving download from ${downloadPageUrl}`);
+    await page.goto(downloadPageUrl, {waitUntil: "domcontentloaded", timeout: 60000});
+    await page.waitForTimeout(3000);
+
+    // Read download button attributes
+    const btnAttrs = await page.evaluate(() => {
+        const el = document.querySelector("#detail-download-button");
+        if (!el) return null;
+        return {
+            onlyXapk: el.getAttribute("data-only-xapk") === "1",
+            exists: true
+        };
+    });
+
+    if (!btnAttrs?.exists) return null;
+
+    // Set up response listener for the AJAX download-url call, then click the button
+    const responsePromise = page.waitForResponse(
+        (r) => r.url().includes("/ajax/app/") && r.url().includes("/download-url"),
+        {timeout: 30000}
+    );
+    await page.locator("#detail-download-button").click();
+    const response = await responsePromise;
+
+    if (!response.ok()) return null;
+    const body = await response.json();
+    if (!body.success) return null;
+
+    const downloadURL = body.data?.downloadURL;
+    if (!downloadURL) return null;
+
+    return {
+        url: `https://dw.uptodown.com/dwn/${downloadURL}`,
+        isXapk: btnAttrs.onlyXapk
+    };
+}
+
+/**
+ * Download APK from Uptodown using patchright (bot-check bypass).
+ * Must use headful mode - Cloudflare/bot protection blocks headless.
+ */
+export const downloadUptodown: (ctx: DownloadContext) => Promise<DownloadResult> =
+    async (ctx: DownloadContext): Promise<DownloadResult> => {
+        const source = ctx.app.sources.find((s) => s.type === "uptodown");
+        if (!source) throw new Error("uptodown: no uptodown source configured");
+
+        const arch = ctx.app.arch ?? "all";
+        const versionsUrl = `${source.url}/versions`;
+
+        // ponytail: headful required for bot protection bypass
+        const browser: Browser = await chromium.launch({headless: false});
+        const page: Page = await browser.newPage();
+
+        try {
+            const versions = await scrapeUptodownVersions(page, versionsUrl);
+            if (versions.length === 0) {
+                throw new Error(`uptodown: no versions found for ${ctx.app.packageName}`);
+            }
+
+            // Filter out SECONDARY/beta versions unless included
+            const filtered = ctx.app.includeBeta
+                ? versions
+                : versions.filter((v) => !/SECONDARY|beta|alpha/i.test(v.version));
+
+            // Select target version
+            let target: UptodownVersionEntry;
+            if (ctx.targetVersion === "latest" || ctx.targetVersion === "auto") {
+                target = filtered[0] ?? versions[0]!;
+            } else {
+                const found = filtered.find(
+                    (v) => v.version === ctx.targetVersion.replace(/^v/, "")
+                );
+                if (!found) {
+                    consola.warn(`uptodown: version ${ctx.targetVersion} not found, using ${filtered[0]!.version}`);
+                }
+                target = found ?? filtered[0]!;
+            }
+
+            consola.success(`Uptodown: selected version ${target.version} for ${ctx.app.packageName}`);
+
+            const dlInfo = await resolveDownloadUrl(page, target.downloadPageUrl);
+            if (!dlInfo) {
+                throw new Error(
+                    `uptodown: no matching APK found for ${ctx.app.packageName} ${target.version} (arch=${arch})`
+                );
+            }
+
+            const ext = dlInfo.isXapk ? ".xapk" : ".apk";
+            const outPath = join(
+                ctx.workDir,
+                `${ctx.app.packageName}-${target.version}-${arch}${ext}`
+            );
+
+            consola.success(`Uptodown: downloading ${dlInfo.url}`);
+            const context = page.context();
+            const cookies = await context.cookies();
+            const cookieStr = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+            const userAgent = await page.evaluate(() => navigator.userAgent);
+
+            await downloadFile(dlInfo.url, outPath, {
+                Cookie: cookieStr,
+                "User-Agent": userAgent,
+                Referer: source.url
+            });
+
+            return {
+                apkPath: outPath,
+                version: target.version,
+                isSplit: dlInfo.isXapk,
+                ...(dlInfo.isXapk ? {splitPath: outPath} : {})
+            };
+        } finally {
+            await browser.close();
+        }
+    };
