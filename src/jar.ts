@@ -185,7 +185,7 @@ export async function ensureBouncyCastleJar(
     }
 
     // Generate java.security override that appends BC as a provider.
-    // Using single '=' (append mode) to keep standard JDK providers intact.
+    // Used with -Djava.security.properties== (double =, append mode).
     // BC must NOT be provider 1 — it breaks SecureRandom initialization.
     const securityFile = join(jarCacheDir, "java.security.bc");
     if (!existsSync(securityFile)) {

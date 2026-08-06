@@ -20,7 +20,7 @@ async function scrapeUptodownVersions(
     versionsUrl: string
 ): Promise<UptodownVersionEntry[]> {
     consola.success(`Uptodown: fetching versions from ${versionsUrl}`);
-    await page.goto(versionsUrl, {waitUntil: "networkidle", timeout: 60000});
+    await page.goto(versionsUrl, {waitUntil: "domcontentloaded", timeout: 60000});
     await page.waitForTimeout(5000);
 
     const versions = await page.evaluate(() => {
