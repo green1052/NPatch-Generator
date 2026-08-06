@@ -27,17 +27,6 @@ export function compareVersions(a: string, b: string): number {
     return 0;
 }
 
-export function highestVersion(versions: string[]): string {
-    return versions.reduce((best, v) =>
-        compareVersions(v, best) > 0 ? v : best
-    );
-}
-
-/** Whether version string contains beta/alpha/rc */
-export function isBetaVersion(version: string): boolean {
-    return /beta|alpha|rc/i.test(version);
-}
-
 export function checkJava(): { ok: boolean; version: string } {
     try {
         const out = execSync("java -version 2>&1", {encoding: "utf-8", timeout: 10000});

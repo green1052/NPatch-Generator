@@ -1,6 +1,7 @@
-import {join} from "node:path";
+import {dirname, join} from "node:path";
+import {existsSync, readdirSync, renameSync, statSync} from "node:fs";
 import {type Browser, chromium, type Page} from "patchright";
-import {compareVersions} from "../util.js";
+import {compareVersions, ensureDir} from "../util.js";
 import {consola} from "consola";
 import type {DownloadContext, DownloadResult} from "./types.js";
 
@@ -219,9 +220,6 @@ export const downloadApkmirror: (ctx: DownloadContext) => Promise<DownloadResult
 
             // Download via browser auto-download (downloadsPath) + file polling.
             // fetch() fails CORS, got fails 403, waitForResponse fails on redirect body.
-            const {ensureDir} = await import("../util.js");
-            const {dirname} = await import("node:path");
-            const {readdirSync, renameSync, statSync} = await import("node:fs");
             ensureDir(dirname(outPath));
 
             // ponytail: poll-based download detection — patchright has no download events

@@ -1,4 +1,4 @@
-import {existsSync, readFileSync, writeFileSync} from "node:fs";
+import {existsSync, readFileSync, unlinkSync, writeFileSync} from "node:fs";
 import {join} from "node:path";
 import got from "got";
 import {consola} from "consola";
@@ -20,7 +20,6 @@ const APKEDITOR_REPO = "REAndroid/APKEditor";
 
 // BouncyCastle provider - required by NPatch for BKS keystore.
 // Not bundled in NPatch jar, not in standard JDK. Must be on classpath.
-const BC_DEFAULT_VERSION = "1.78.1";
 
 const githubHeaders: Record<string, string> = {
     Accept: "application/vnd.github+json",
@@ -101,18 +100,20 @@ export async function ensureApkEditorJar(
     ensureDir(jarCacheDir);
     const targetPath = join(jarCacheDir, "apkeditor.jar");
 
-    const cacheMeta = join(jarCacheDir, "apkeditor.jar.version");
-    if (existsSync(targetPath) && existsSync(cacheMeta)) {
-        const cached = readFileSync(cacheMeta, "utf-8").trim();
-        if (cached === version) {
-            consola.success(`APKEditor jar cached (${version})`);
-            return targetPath;
-        }
-    }
-
     consola.success(`Fetching APKEditor release info (${version})...`);
     const release = await githubRelease(APKEDITOR_REPO, version);
     const tag = release.tag_name;
+
+    // Cache check: compare tag (resolved) against cached meta
+    const cacheMeta = join(jarCacheDir, "apkeditor.jar.version");
+    if (existsSync(targetPath) && existsSync(cacheMeta)) {
+        const cached = readFileSync(cacheMeta, "utf-8").trim();
+        if (cached === tag) {
+            consola.success(`APKEditor jar cached (${tag})`);
+            return targetPath;
+        }
+        consola.warn(`APKEditor jar version mismatch (cached: ${cached}, latest: ${tag}). Re-downloading...`);
+    }
 
     // APKEditor asset name: "APKEditor-1.4.7.jar"
     const jarAsset = release.assets.find((a) => /^APKEditor-.*\.jar$/i.test(a.name));
@@ -153,7 +154,7 @@ async function resolveBcVersion(version: string): Promise<string> {
  */
 export async function ensureBouncyCastleJar(
     jarCacheDir: string,
-    version: string = BC_DEFAULT_VERSION
+    version: string = "latest"
 ): Promise<string> {
     const resolvedVersion = await resolveBcVersion(version);
     ensureDir(jarCacheDir);
@@ -168,7 +169,6 @@ export async function ensureBouncyCastleJar(
             // Still ensure java.security override exists
         } else {
             consola.warn(`BouncyCastle version mismatch (cached: ${cached}, latest: ${resolvedVersion}). Re-downloading...`);
-            const {unlinkSync} = await import("node:fs");
             try {
                 unlinkSync(targetPath);
             } catch {
