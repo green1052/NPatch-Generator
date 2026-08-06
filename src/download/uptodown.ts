@@ -55,8 +55,6 @@ async function resolveDownloadUrl(
 ): Promise<{ url: string; isXapk: boolean } | null> {
     consola.success(`Uptodown: resolving download from ${downloadPageUrl}`);
     await page.goto(downloadPageUrl, {waitUntil: "domcontentloaded", timeout: 60000});
-    // Wait for download JS to load and attach event handlers
-    await page.waitForLoadState("networkidle", {timeout: 30000}).catch(() => {});
     await page.waitForTimeout(3000);
 
     // Read download button attributes
@@ -75,14 +73,10 @@ async function resolveDownloadUrl(
     // Use evaluate().click() instead of locator.click() — xvfb actionability checks fail on CI.
     const responsePromise = page.waitForResponse(
         (r) => r.url().includes("/ajax/app/") && r.url().includes("/download-url"),
-        {timeout: 60000}
+        {timeout: 30000}
     );
     await page.evaluate(() => {
-        const el = document.querySelector("#detail-download-button") as HTMLElement;
-        if (!el) return;
-        // Dispatch both click and mousedown for frameworks that listen to mousedown
-        el.dispatchEvent(new MouseEvent("click", {bubbles: true, cancelable: true}));
-        el.dispatchEvent(new MouseEvent("mousedown", {bubbles: true, cancelable: true}));
+        (document.querySelector("#detail-download-button") as HTMLElement)?.click();
     });
     const response = await responsePromise;
 
