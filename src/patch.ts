@@ -133,11 +133,8 @@ export async function patchApk(
         true
     );
 
-    // Check for failure: non-zero exit OR PatchError in output
-    const combinedOutput = result.stderr + result.stdout;
-    const hasError = result.code !== 0 || /PatchError|Exception|Error:/i.test(combinedOutput);
-
-    if (hasError) {
+    // Check for failure: non-zero exit. PatchError with exit 0 = non-fatal warning.
+    if (result.code !== 0) {
         consola.error(`NPatch failed (exit ${result.code})`);
         consola.error(result.stderr || result.stdout);
         throw new Error(`NPatch failed for ${app.packageName}`);
