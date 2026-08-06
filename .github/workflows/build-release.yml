@@ -30,7 +30,7 @@ jobs:
                     java-version: 25
 
             -   name: Install dependencies
-                run: pnpm install --no-frozen-lockfile
+                run: pnpm install --frozen-lockfile --config.minimumReleaseAge=0
 
             -   name: Install patchright browser
                 run: pnpm exec patchright install chromium
