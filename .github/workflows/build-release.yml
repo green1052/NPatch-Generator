@@ -32,6 +32,12 @@ jobs:
             -   name: Install dependencies
                 run: pnpm install --frozen-lockfile
 
+            -   name: Cache patchright chromium
+                uses: actions/cache@v4
+                with:
+                    path: ~/.cache/patchright
+                    key: patchright-chromium
+
             -   name: Install patchright browser
                 run: pnpm exec patchright install chromium
 
