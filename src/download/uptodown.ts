@@ -69,12 +69,15 @@ async function resolveDownloadUrl(
 
     if (!btnAttrs?.exists) return null;
 
-    // Set up response listener for the AJAX download-url call, then click the button
+    // Set up response listener for the AJAX download-url call, then click the button.
+    // Use evaluate().click() instead of locator.click() — xvfb actionability checks fail on CI.
     const responsePromise = page.waitForResponse(
         (r) => r.url().includes("/ajax/app/") && r.url().includes("/download-url"),
         {timeout: 30000}
     );
-    await page.locator("#detail-download-button").click();
+    await page.evaluate(() => {
+        (document.querySelector("#detail-download-button") as HTMLElement)?.click();
+    });
     const response = await responsePromise;
 
     if (!response.ok()) return null;
