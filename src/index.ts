@@ -9,6 +9,7 @@ import {patchApk} from "./patch.js";
 import {downloadDirect} from "./download/direct.js";
 import {downloadApkmirror} from "./download/apkmirror.js";
 import {downloadUptodown} from "./download/uptodown.js";
+import {downloadVendetta} from "./download/vendetta.js";
 import type {DownloadContext, DownloadResult} from "./download/types.js";
 
 interface AppResult {
@@ -38,6 +39,8 @@ async function downloadApp(
                     return await downloadApkmirror(ctx);
                 case "uptodown":
                     return await downloadUptodown(ctx);
+                case "vendetta":
+                    return await downloadVendetta(ctx);
             }
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);

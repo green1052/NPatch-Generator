@@ -1,7 +1,7 @@
 import {readFileSync} from "node:fs";
 import {resolve} from "node:path";
 
-export type SourceType = "apkmirror" | "uptodown" | "direct";
+export type SourceType = "apkmirror" | "uptodown" | "direct" | "vendetta";
 
 export interface ApkSource {
     type: SourceType;

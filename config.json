@@ -7,6 +7,16 @@
     "concurrency": 3,
     "apps": [
         {
+            "packageName": "com.discord",
+            "arch": "arm64-v8a",
+            "sources": [
+                {
+                    "type": "vendetta",
+                    "url": "https://tracker.vendetta.rocks"
+                }
+            ]
+        },
+        {
             "packageName": "com.dcinside.app.android",
             "sources": [
                 {
@@ -21,15 +31,6 @@
                 {
                     "type": "uptodown",
                     "url": "https://com-novelpia-android-me.kr.uptodown.com/android"
-                }
-            ]
-        },
-        {
-            "packageName": "com.discord",
-            "sources": [
-                {
-                    "type": "uptodown",
-                    "url": "https://discord-chat-for-gamers.kr.uptodown.com/android"
                 }
             ]
         }
