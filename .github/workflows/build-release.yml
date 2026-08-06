@@ -38,6 +38,12 @@ jobs:
                     path: ~/.cache/patchright
                     key: patchright-chromium
 
+            -   name: Cache jars
+                uses: actions/cache@v4
+                with:
+                    path: bin
+                    key: jars-${{ hashFiles('package.json') }}
+
             -   name: Install patchright browser
                 run: pnpm exec patchright install chromium
 
