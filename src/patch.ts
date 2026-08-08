@@ -21,7 +21,7 @@ export async function mergeSplitApk(
     consola.success(`Merging split APK: ${splitPath} -> ${mergedPath}`);
     const result = await runCommand(
         "java",
-        ["-jar", apkeditorJar, "merge", "-i", splitPath, "-o", mergedPath, "-f"],
+        ["-jar", apkeditorJar, "merge", "-i", splitPath, "-o", mergedPath, "-clean-meta", "-f"],
         outputDir,
         true
     );
@@ -30,6 +30,46 @@ export async function mergeSplitApk(
         consola.error(`APKEditor merge failed (exit ${result.code}): ${result.stderr}`);
         throw new Error(`split APK merge failed for ${splitPath}`);
     }
+
+    // Sign merged APK with debug keystore so NPatch can read original signature.
+    // Play Store splits have no v1 signature — APKEditor merge strips it too.
+    // NPatch fails with "get original signature failed" without a v1 signature.
+    const debugKeystore = join(dirname(apkeditorJar), "debug.keystore");
+    if (!existsSync(debugKeystore)) {
+        consola.success("Generating debug keystore for signing...");
+        await runCommand(
+            "keytool",
+            [
+                "-genkeypair",
+                "-keystore", debugKeystore,
+                "-storepass", "android",
+                "-alias", "androiddebugkey",
+                "-keypass", "android",
+                "-keyalg", "RSA",
+                "-keysize", "2048",
+                "-validity", "10000",
+                "-dname", "CN=Android Debug,O=Android,C=US"
+            ],
+            undefined,
+            false
+        );
+    }
+
+    consola.success("Signing merged APK with debug keystore...");
+    await runCommand(
+        "jarsigner",
+        [
+            "-keystore", debugKeystore,
+            "-storepass", "android",
+            "-keypass", "android",
+            "-sigalg", "SHA256withRSA",
+            "-digestalg", "SHA-256",
+            mergedPath,
+            "androiddebugkey"
+        ],
+        undefined,
+        false
+    );
 
     consola.success(`Merged APK: ${mergedPath}`);
     return mergedPath;
