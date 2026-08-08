@@ -32,8 +32,10 @@ export async function mergeSplitApk(
     }
 
     // Sign merged APK with debug keystore so NPatch can read original signature.
-    // Play Store splits have no v1 signature — APKEditor merge strips it too.
+    // Play Store splits have no v1 signature — APKEditor clean-meta strips it too.
     // NPatch fails with "get original signature failed" without a v1 signature.
+    // After NPatch patches, it re-signs with v2/v3, making the v1 signature stale.
+    // The stale v1 is harmless — Android ignores v1 when v2/v3 is present.
     const debugKeystore = join(dirname(apkeditorJar), "debug.keystore");
     if (!existsSync(debugKeystore)) {
         consola.success("Generating debug keystore for signing...");
