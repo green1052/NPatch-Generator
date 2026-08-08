@@ -55,7 +55,6 @@ async function downloadSplit(
         createWriteStream(outPath)
     );
 
-    // Verify non-empty
     if (!existsSync(outPath) || statSync(outPath).size === 0) {
         throw new Error(`Vendetta: ${splitName} download failed (empty file)`);
     }
@@ -71,7 +70,6 @@ async function downloadSplit(
 export const downloadVendetta: (ctx: DownloadContext) => Promise<DownloadResult> =
     async (ctx: DownloadContext): Promise<DownloadResult> => {
         const arch = ctx.app.arch ?? "arm64-v8a";
-        // ponytail: arch mapping — Play Store uses underscores not hyphens
         const archMap: Record<string, string> = {
             "arm64-v8a": "arm64_v8a",
             "arm-v7a": "armeabi_v7a",
@@ -80,7 +78,6 @@ export const downloadVendetta: (ctx: DownloadContext) => Promise<DownloadResult>
         };
         const playArch = archMap[arch] ?? "arm64_v8a";
 
-        // Fetch latest versionCodes from tracker
         consola.success("Vendetta: fetching versionCodes from tracker...");
         const index = await got(`${TRACKER_BASE}/tracker/index`, {
             responseType: "json"
@@ -92,7 +89,6 @@ export const downloadVendetta: (ctx: DownloadContext) => Promise<DownloadResult>
 
         consola.success(`Vendetta: ${ctx.app.packageName} v${version} (channel=${channel}, code=${versionCode})`);
 
-        // Download splits into a temp dir
         const splitsDir = join(ctx.workDir, `${ctx.app.packageName}-${version}-splits`);
         ensureDir(splitsDir);
 
@@ -108,7 +104,6 @@ export const downloadVendetta: (ctx: DownloadContext) => Promise<DownloadResult>
         consola.success(`Vendetta: packaging ${splits.length} splits → ${apkmPath}`);
         const zip = new AdmZip();
 
-        // manifest.json — APKEditor expects this in .apkm
         const manifest = {
             splitAPKs: splits.map((s) => s.name)
         };

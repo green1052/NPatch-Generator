@@ -9,7 +9,8 @@ import type {DownloadResult} from "./download/types.js";
 
 /**
  * Merge a split APK bundle (.apkm/.xapk) into a single APK using APKEditor.
- * Returns path to the merged APK.
+ * Then zipalign and sign with debug keystore so NPatch can read original signature.
+ * Returns path to the merged, aligned, signed APK.
  */
 export async function mergeSplitApk(
     apkeditorJar: string,
@@ -32,11 +33,13 @@ export async function mergeSplitApk(
         throw new Error(`split APK merge failed for ${splitPath}`);
     }
 
-    // Sign merged APK with debug keystore so NPatch can read original signature.
-    // Play Store splits have no v1 signature — APKEditor clean-meta strips it too.
-    // NPatch fails with "get original signature failed" without a v1 signature.
-    // After NPatch patches, it re-signs with v2/v3, making the v1 signature stale.
-    // The stale v1 is harmless — Android ignores v1 when v2/v3 is present.
+    // zipalign BEFORE signing — NPatch output must not be re-aligned (breaks v2 signature).
+    // Merge output has no signing block, so zipalign is safe here.
+    const alignedPath = `${mergedPath}.aligned`;
+    zipalign(mergedPath, alignedPath);
+    renameSync(alignedPath, mergedPath);
+
+    // Sign with debug keystore so NPatch can read original signature for sigbypass.
     const debugKeystore = join(dirname(apkeditorJar), "debug.keystore");
     if (!existsSync(debugKeystore)) {
         consola.success("Generating debug keystore for signing...");
@@ -127,7 +130,7 @@ function buildNpatchArgs(
 
 /**
  * Run NPatch on the given APK.
- * If the download is a split bundle, merges it first via APKEditor.
+ * If .apkm/.xapk, merges + zipaligns + signs first via APKEditor.
  * Returns path to the patched APK.
  */
 export async function patchApk(
@@ -141,7 +144,7 @@ export async function patchApk(
 ): Promise<string> {
     let apkPath = download.apkPath;
 
-    // .apkm = multi-APK bundle, needs APKEditor merge.
+    // .apkm = multi-APK bundle, needs APKEditor merge + zipalign + sign.
     // .xapk = single APK structure (NPatch handles directly, no merge needed).
     if (download.isSplit && download.splitPath && download.splitPath.endsWith(".apkm")) {
         apkPath = await mergeSplitApk(apkeditorJar, download.splitPath, outputDir);
@@ -173,7 +176,7 @@ export async function patchApk(
             ...args
         ],
         undefined,
-        true
+        npatchArgs.verbose
     );
 
     // Check for failure: non-zero exit. PatchError with exit 0 = non-fatal warning.
@@ -203,12 +206,6 @@ export async function patchApk(
     }
 
     const finalPath = join(outputDir, candidates[candidates.length - 1]!);
-
-    // zipalign: NPatch output is not aligned — Android requires 4-byte alignment for v2 signed APKs
-    const alignedPath = finalPath.replace(".apk", "-aligned.apk");
-    zipalign(finalPath, alignedPath);
-    renameSync(alignedPath, finalPath);
-
     consola.success(`Patched APK: ${finalPath}`);
     return finalPath;
 }
