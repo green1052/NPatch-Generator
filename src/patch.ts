@@ -1,6 +1,7 @@
 import {basename, dirname, extname, join} from "node:path";
-import {existsSync, readdirSync} from "node:fs";
+import {existsSync, readdirSync, renameSync} from "node:fs";
 import {runCommand} from "./util.js";
+import {zipalign} from "./zipalign.js";
 import {consola} from "consola";
 import type {AppConfig, NpatchArgs} from "./config.js";
 import {resolveNpatchArgs} from "./config.js";
@@ -202,6 +203,12 @@ export async function patchApk(
     }
 
     const finalPath = join(outputDir, candidates[candidates.length - 1]!);
+
+    // zipalign: NPatch output is not aligned — Android requires 4-byte alignment for v2 signed APKs
+    const alignedPath = finalPath.replace(".apk", "-aligned.apk");
+    zipalign(finalPath, alignedPath);
+    renameSync(alignedPath, finalPath);
+
     consola.success(`Patched APK: ${finalPath}`);
     return finalPath;
 }
