@@ -1,7 +1,6 @@
 import {basename, dirname, extname, join} from "node:path";
-import {existsSync, readdirSync, renameSync} from "node:fs";
+import {existsSync, readdirSync} from "node:fs";
 import {runCommand} from "./util.js";
-import {zipalign} from "./zipalign.js";
 import {consola} from "consola";
 import type {AppConfig, NpatchArgs} from "./config.js";
 import {resolveNpatchArgs} from "./config.js";
@@ -34,10 +33,7 @@ export async function mergeSplitApk(
         throw new Error(`split APK merge failed for ${splitPath}`);
     }
 
-    // zipalign before NPatch — merge output has no signing block, so safe.
-    const alignedPath = `${mergedPath}.aligned`;
-    zipalign(mergedPath, alignedPath);
-    renameSync(alignedPath, mergedPath);
+    // APKEditor merge output is already aligned via ARSCLib ZipAligner.
 
     // sigbypass > 0 needs original signature — sign with debug keystore so NPatch can read it.
     // sigbypass 0 skips signature reading — no jarsigner needed.
