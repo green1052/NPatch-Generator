@@ -21,7 +21,7 @@ export async function mergeSplitApk(
     consola.success(`Merging split APK: ${splitPath} -> ${mergedPath}`);
     const result = await runCommand(
         "java",
-        ["-jar", apkeditorJar, "merge", "-i", splitPath, "-o", mergedPath, "-clean-meta", "-f"],
+        ["-jar", apkeditorJar, "merge", "-i", splitPath, "-o", mergedPath, "-f"],
         outputDir,
         true
     );
