@@ -15,7 +15,8 @@ import type {DownloadResult} from "./download/types.js";
 export async function mergeSplitApk(
     apkeditorJar: string,
     splitPath: string,
-    outputDir: string
+    outputDir: string,
+    sigbypassLevel: number
 ): Promise<string> {
     const base = splitPath.replace(/\.(apkm|xapk)$/i, "");
     const mergedPath = `${base}-merged.apk`;
@@ -33,49 +34,51 @@ export async function mergeSplitApk(
         throw new Error(`split APK merge failed for ${splitPath}`);
     }
 
-    // zipalign BEFORE signing — NPatch output must not be re-aligned (breaks v2 signature).
-    // Merge output has no signing block, so zipalign is safe here.
+    // zipalign before NPatch — merge output has no signing block, so safe.
     const alignedPath = `${mergedPath}.aligned`;
     zipalign(mergedPath, alignedPath);
     renameSync(alignedPath, mergedPath);
 
-    // Sign with debug keystore so NPatch can read original signature for sigbypass.
-    const debugKeystore = join(dirname(apkeditorJar), "debug.keystore");
-    if (!existsSync(debugKeystore)) {
-        consola.success("Generating debug keystore for signing...");
+    // sigbypass > 0 needs original signature — sign with debug keystore so NPatch can read it.
+    // sigbypass 0 skips signature reading — no jarsigner needed.
+    if (sigbypassLevel > 0) {
+        const debugKeystore = join(dirname(apkeditorJar), "debug.keystore");
+        if (!existsSync(debugKeystore)) {
+            consola.success("Generating debug keystore for signing...");
+            await runCommand(
+                "keytool",
+                [
+                    "-genkeypair",
+                    "-keystore", debugKeystore,
+                    "-storepass", "android",
+                    "-alias", "androiddebugkey",
+                    "-keypass", "android",
+                    "-keyalg", "RSA",
+                    "-keysize", "2048",
+                    "-validity", "10000",
+                    "-dname", "CN=Android Debug,O=Android,C=US"
+                ],
+                undefined,
+                false
+            );
+        }
+
+        consola.success("Signing merged APK with debug keystore...");
         await runCommand(
-            "keytool",
+            "jarsigner",
             [
-                "-genkeypair",
                 "-keystore", debugKeystore,
                 "-storepass", "android",
-                "-alias", "androiddebugkey",
                 "-keypass", "android",
-                "-keyalg", "RSA",
-                "-keysize", "2048",
-                "-validity", "10000",
-                "-dname", "CN=Android Debug,O=Android,C=US"
+                "-sigalg", "SHA256withRSA",
+                "-digestalg", "SHA-256",
+                mergedPath,
+                "androiddebugkey"
             ],
             undefined,
             false
         );
     }
-
-    consola.success("Signing merged APK with debug keystore...");
-    await runCommand(
-        "jarsigner",
-        [
-            "-keystore", debugKeystore,
-            "-storepass", "android",
-            "-keypass", "android",
-            "-sigalg", "SHA256withRSA",
-            "-digestalg", "SHA-256",
-            mergedPath,
-            "androiddebugkey"
-        ],
-        undefined,
-        false
-    );
 
     consola.success(`Merged APK: ${mergedPath}`);
     return mergedPath;
@@ -106,14 +109,14 @@ function buildNpatchArgs(
         args.push("-npa");
     }
 
-    // Module embedding (conflicts with --manager)
+    // modules if specified, otherwise manager mode (no modules = manager)
     if (npatchArgs.modules.length > 0 && !npatchArgs.manager) {
         for (const mod of npatchArgs.modules) {
             args.push("-m", mod);
         }
+    } else {
+        args.push("--manager");
     }
-
-    if (npatchArgs.manager) args.push("--manager");
     if (npatchArgs.newPackageName) args.push("-p", npatchArgs.newPackageName);
     if (npatchArgs.useMicroG) args.push("--useMicroG");
     if (npatchArgs.hideLibs) args.push("--hidelibs");
@@ -144,17 +147,18 @@ export async function patchApk(
 ): Promise<string> {
     let apkPath = download.apkPath;
 
+    const npatchArgs = resolveNpatchArgs(app, globalNpatchArgs);
+
     // .apkm = multi-APK bundle, needs APKEditor merge + zipalign + sign.
     // .xapk = single APK structure (NPatch handles directly, no merge needed).
     if (download.isSplit && download.splitPath && download.splitPath.endsWith(".apkm")) {
-        apkPath = await mergeSplitApk(apkeditorJar, download.splitPath, outputDir);
+        apkPath = await mergeSplitApk(apkeditorJar, download.splitPath, outputDir, npatchArgs.sigbypassLevel);
     }
 
     if (!existsSync(apkPath)) {
         throw new Error(`patch: input APK not found: ${apkPath}`);
     }
 
-    const npatchArgs = resolveNpatchArgs(app, globalNpatchArgs);
     const args = buildNpatchArgs(apkPath, outputDir, npatchArgs);
 
     // Use -cp instead of -jar so BouncyCastle provider is on classpath.

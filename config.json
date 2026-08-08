@@ -9,6 +9,9 @@
         {
             "packageName": "com.discord",
             "arch": "arm64-v8a",
+            "npatchArgs": {
+                "sigbypassLevel": 0
+            },
             "sources": [
                 {
                     "type": "vendetta",
