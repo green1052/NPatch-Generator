@@ -68,6 +68,8 @@ jobs:
                     done
 
                     sudo systemctl is-active --quiet nordvpnd
+                    sudo groupadd nordvpn
+                    sudo usermod -aG nordvpn $USER
 
             -   name: Connect to NordVPN US
                 env:
