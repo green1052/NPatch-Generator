@@ -120,7 +120,6 @@ jobs:
                     fi
                     
                     sg nordvpn -c 'nordvpn status'
-                    curl --fail --silent --show-error https://ipinfo.io/json
 
             -   name: Build APKs
                 env:
@@ -138,12 +137,10 @@ jobs:
                     
                     sleep 2
                     
-                     if ! kill -0 "$XVFB_PID" 2>/dev/null; then
+                    if ! kill -0 "$XVFB_PID" 2>/dev/null; then
                         cat /tmp/xvfb.log || true
                         exit 1
-                     fi
-
-                    curl --fail --silent --show-error https://ipinfo.io/json
+                    fi
                     
                     pnpm start
 
