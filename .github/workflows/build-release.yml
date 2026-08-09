@@ -47,12 +47,24 @@ jobs:
             -   name: Install patchright browser
                 run: pnpm exec patchright install chromium
 
+            -   name: Connect NordVPN
+                id: vpn
+                uses: pau-vega/nordvpn-action@nordvpn-v1
+                with:
+                    region: US
+                    username: ${{ secrets.NORDVPN_SERVICE_USERNAME }}
+                    password: ${{ secrets.NORDVPN_SERVICE_PASSWORD }}
+
             -   name: Build APKs
                 env:
                     DISPLAY: :99
                 run: |
                     Xvfb :99 -screen 0 1920x1080x24 &
                     pnpm start
+
+            -   name: Disconnect VPN
+                if: always()
+                uses: pau-vega/nordvpn-action/disconnect@nordvpn-v1
 
             -   name: Upload to Releases
                 uses: softprops/action-gh-release@v3
