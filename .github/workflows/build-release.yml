@@ -93,7 +93,7 @@ jobs:
                       "nordvpn login --token \"$NORDVPN_TOKEN\""
 
                   nordvpn_cmd \
-                      "nordvpn connect United_States"
+                      "nordvpn connect South_Korea"
 
                   CONNECTED=false
 
