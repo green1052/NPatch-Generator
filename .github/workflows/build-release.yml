@@ -47,102 +47,61 @@ jobs:
             -   name: Install patchright browser
                 run: pnpm exec patchright install chromium
 
-            -   name: Connect to NordVPN US
-                env:
-                    NORDVPN_SERVICE_USERNAME: ${{ secrets.NORDVPN_SERVICE_USERNAME }}
-                    NORDVPN_SERVICE_PASSWORD: ${{ secrets.NORDVPN_SERVICE_PASSWORD }}
+            -   name: Install NordVPN
                 run: |
                     set -euo pipefail
 
-                    sudo apt-get update
-                    sudo apt-get install -y openvpn unzip curl
+                    curl -fsSL \
+                        https://downloads.nordcdn.com/apps/linux/install.sh \
+                        -o /tmp/nordvpn-install.sh
 
-                    sudo mkdir -p /etc/openvpn/nordvpn
+                    sh /tmp/nordvpn-install.sh
 
-                    curl -fL \
-                        https://downloads.nordcdn.com/configs/archives/servers/ovpn.zip \
-                        -o /tmp/nordvpn-ovpn.zip
+                    sudo systemctl enable nordvpnd
+                    sudo systemctl start nordvpnd
 
-                    rm -rf /tmp/nordvpn-configs
-                    mkdir -p /tmp/nordvpn-configs
-
-                    unzip -q \
-                        /tmp/nordvpn-ovpn.zip \
-                        -d /tmp/nordvpn-configs
-
-                    CONFIG=$(find /tmp/nordvpn-configs \
-                        -type f \
-                        -name 'us*.nordvpn.com.udp.ovpn' \
-                        | sort \
-                        | head -n 1)
-
-                    if [ -z "$CONFIG" ]; then
-                        echo "ERROR: No US OpenVPN configuration found."
-                        find /tmp/nordvpn-configs \
-                            -type f \
-                            -name '*.ovpn' \
-                            | head -100
-                        exit 1
-                    fi
-
-                    sudo cp \
-                        "$CONFIG" \
-                        /etc/openvpn/nordvpn/us.ovpn
-
-                    sudo install -m 600 /dev/null \
-                        /etc/openvpn/nordvpn/auth.txt
-
-                    printf '%s\n%s\n' \
-                        "$NORDVPN_SERVICE_USERNAME" \
-                        "$NORDVPN_SERVICE_PASSWORD" \
-                        | sudo tee /etc/openvpn/nordvpn/auth.txt > /dev/null
-
-                    sudo openvpn \
-                        --config /etc/openvpn/nordvpn/us.ovpn \
-                        --auth-user-pass /etc/openvpn/nordvpn/auth.txt \
-                        --auth-nocache \
-                        --daemon \
-                        --writepid /run/openvpn-nordvpn-us.pid \
-                        --log /tmp/nordvpn.log
-
-                    CONNECTED=false
-
-                    for i in {1..60}; do
-                        if sudo grep -q \
-                            "Initialization Sequence Completed" \
-                            /tmp/nordvpn.log; then
-                            CONNECTED=true
+                    for i in {1..30}; do
+                        if sudo systemctl is-active --quiet nordvpnd; then
                             break
                         fi
-
-                        if sudo grep -qiE \
-                            "AUTH_FAILED|AUTHENTICATION_FAILED|TLS Error|Connection failed" \
-                            /tmp/nordvpn.log; then
-                            sudo tail -100 /tmp/nordvpn.log
-                            exit 1
-                        fi
-
                         sleep 2
                     done
 
-                    if [ "$CONNECTED" != "true" ]; then
-                        sudo tail -100 /tmp/nordvpn.log
-                        exit 1
-                    fi
+                    sudo systemctl is-active --quiet nordvpnd
 
-                    PUBLIC_IP=$(curl -4fsS --max-time 15 \
-                        https://api.ipify.org)
+            -   name: Connect to NordVPN US
+                env:
+                    NORDVPN_TOKEN: ${{ secrets.NORDVPN_TOKEN }}
+                run: |
+                    set -euo pipefail
+
+                    nordvpn login --token "$NORDVPN_TOKEN"
+
+                    nordvpn set technology NordLynx
+                    nordvpn connect United_States
+
+                    for i in {1..30}; do
+                        if nordvpn status | grep -q "Connected"; then
+                            break
+                        fi
+                        sleep 2
+                    done
+
+                    nordvpn status
 
                     VPN_COUNTRY=$(curl -4fsS --max-time 15 \
                         https://ipinfo.io/country)
 
-                    VPN_COUNTRY=$(echo "$VPN_COUNTRY" | tr -d '[:space:]')
+                    VPN_COUNTRY=$(printf '%s' "$VPN_COUNTRY" | tr -d '[:space:]')
+
+                    PUBLIC_IP=$(curl -4fsS --max-time 15 \
+                        https://api.ipify.org)
 
                     echo "Public IP: $PUBLIC_IP"
                     echo "VPN country: $VPN_COUNTRY"
 
                     if [ "$VPN_COUNTRY" != "US" ]; then
-                        echo "ERROR: VPN is not connected to the United States."
+                        echo "ERROR: NordVPN is not connected to the United States."
                         exit 1
                     fi
 
@@ -151,35 +110,15 @@ jobs:
                     DISPLAY: :99
                 run: |
                     set -e
+
                     Xvfb :99 -screen 0 1920x1080x24 &
+
                     pnpm start
 
             -   name: Disconnect NordVPN
                 if: always()
                 run: |
-                    if [ -f /run/openvpn-nordvpn-us.pid ]; then
-                        PID=$(sudo cat /run/openvpn-nordvpn-us.pid || true)
-
-                        if [ -n "${PID:-}" ] && \
-                           sudo kill -0 "$PID" 2>/dev/null; then
-                            sudo kill "$PID" || true
-
-                            for i in {1..15}; do
-                                if ! sudo kill -0 "$PID" 2>/dev/null; then
-                                    break
-                                fi
-                                sleep 1
-                            done
-                        fi
-
-                        sudo rm -f /run/openvpn-nordvpn-us.pid
-                    fi
-
-                    sudo pkill openvpn || true
-                    sudo rm -rf /etc/openvpn/nordvpn
-                    rm -rf /tmp/nordvpn-configs
-                    rm -f /tmp/nordvpn-ovpn.zip
-                    rm -f /tmp/nordvpn.log
+                    sudo nordvpn disconnect || true
 
             -   name: Upload to Releases
                 uses: softprops/action-gh-release@v3
