@@ -76,7 +76,7 @@ jobs:
 
                   sudo systemctl is-active --quiet nordvpnd
 
-            - name: Connect to NordVPN US
+            - name: Connect to NordVPN
               shell: bash
               env:
                   NORDVPN_TOKEN: ${{ secrets.NORDVPN_TOKEN }}
