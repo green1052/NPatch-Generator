@@ -93,9 +93,6 @@ jobs:
                       "nordvpn login --token \"$NORDVPN_TOKEN\""
 
                   nordvpn_cmd \
-                      "nordvpn set technology NordLynx"
-
-                  nordvpn_cmd \
                       "nordvpn connect United_States"
 
                   CONNECTED=false
