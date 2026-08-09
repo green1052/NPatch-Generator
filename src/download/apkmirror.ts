@@ -181,7 +181,15 @@ export const downloadApkmirror: (ctx: DownloadContext) => Promise<DownloadResult
 
         // ponytail: headful required for Cloudflare bypass, downloadsPath for auto-download
         const browser: Browser = await chromium.launch({headless: false, downloadsPath: ctx.workDir});
-        const page: Page = await browser.newPage();
+        const context = await browser.newContext({
+            locale: "ko-KR",
+            timezoneId: "Asia/Seoul",
+            geolocation: {latitude: 37.5665, longitude: 126.9780},
+            permissions: ["geolocation"],
+            viewport: {width: 1920, height: 1080},
+            screen: {width: 1920, height: 1080}
+        });
+        const page: Page = await context.newPage();
 
         try {
             const versions = await scrapeVersions(page, source.url, includeBeta);

@@ -111,7 +111,15 @@ export const downloadUptodown: (ctx: DownloadContext) => Promise<DownloadResult>
 
         // ponytail: headful required for bot protection bypass
         const browser: Browser = await chromium.launch({headless: false});
-        const page: Page = await browser.newPage();
+        const context = await browser.newContext({
+            locale: "ko-KR",
+            timezoneId: "Asia/Seoul",
+            geolocation: {latitude: 37.5665, longitude: 126.9780},
+            permissions: ["geolocation"],
+            viewport: {width: 1920, height: 1080},
+            screen: {width: 1920, height: 1080}
+        });
+        const page: Page = await context.newPage();
 
         try {
             const versions = await scrapeUptodownVersions(page, versionsUrl);
@@ -154,7 +162,6 @@ export const downloadUptodown: (ctx: DownloadContext) => Promise<DownloadResult>
             );
 
             consola.success(`Uptodown: downloading ${dlInfo.url}`);
-            const context = page.context();
             const cookies = await context.cookies();
             const cookieStr = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
             const userAgent = await page.evaluate(() => navigator.userAgent);
