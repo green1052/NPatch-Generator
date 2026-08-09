@@ -1,4 +1,5 @@
 import {join} from "node:path";
+import pLimit from "p-limit";
 import {type Browser, chromium, type Page} from "patchright";
 import {downloadFile} from "../util.js";
 import {consola} from "consola";
@@ -10,6 +11,9 @@ interface UptodownVersionEntry {
     downloadPageUrl: string;
     isXapk: boolean;
 }
+
+// Turnstile is slow or rejects concurrent challenges from one CI IP.
+const downloadLimit = pLimit(1);
 
 /**
  * Scrape Uptodown versions page.
@@ -73,7 +77,7 @@ async function resolveDownloadUrl(
     // Use evaluate().click() instead of locator.click() — xvfb actionability checks fail on CI.
     const responsePromise = page.waitForResponse(
         (r) => r.url().includes("/ajax/app/") && r.url().includes("/download-url"),
-        {timeout: 30000}
+        {timeout: 120000}
     );
     await page.evaluate(() => {
         (document.querySelector("#detail-download-button") as HTMLElement)?.click();
@@ -98,7 +102,7 @@ async function resolveDownloadUrl(
  * Must use headful mode - Cloudflare/bot protection blocks headless.
  */
 export const downloadUptodown: (ctx: DownloadContext) => Promise<DownloadResult> =
-    async (ctx: DownloadContext): Promise<DownloadResult> => {
+    (ctx: DownloadContext): Promise<DownloadResult> => downloadLimit(async (): Promise<DownloadResult> => {
         const source = ctx.app.sources.find((s) => s.type === "uptodown");
         if (!source) throw new Error("uptodown: no uptodown source configured");
 
@@ -170,4 +174,4 @@ export const downloadUptodown: (ctx: DownloadContext) => Promise<DownloadResult>
         } finally {
             await browser.close();
         }
-    };
+    });
