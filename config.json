@@ -4,7 +4,7 @@
     "npatchVersion": "latest",
     "apkeditorVersion": "latest",
     "bcVersion": "latest",
-    "concurrency": 3,
+    "concurrency": 1,
     "apps": [
         {
             "packageName": "com.discord",
