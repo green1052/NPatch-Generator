@@ -2,7 +2,7 @@ name: Build and Release
 
 on:
     schedule:
-        -   cron: "0 0 */3 * *"
+        - cron: "0 0 */3 * *"
     workflow_dispatch:
 
 permissions:
@@ -14,125 +14,183 @@ jobs:
         timeout-minutes: 60
 
         steps:
-            -   uses: actions/checkout@v7
+            - name: Checkout
+              uses: actions/checkout@v7
 
-            -   uses: pnpm/action-setup@v6
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v6
 
-            -   uses: actions/setup-node@v7
-                with:
-                    node-version: latest
-                    cache: pnpm
+            - name: Setup Node.js
+              uses: actions/setup-node@v7
+              with:
+                  node-version: latest
+                  cache: pnpm
 
-            -   name: Setup JDK 25
-                uses: actions/setup-java@v5
-                with:
-                    distribution: temurin
-                    java-version: 25
+            - name: Setup JDK 25
+              uses: actions/setup-java@v5
+              with:
+                  distribution: temurin
+                  java-version: 25
 
-            -   name: Install dependencies
-                run: pnpm install --frozen-lockfile
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
 
-            -   name: Cache patchright chromium
-                uses: actions/cache@v6
-                with:
-                    path: ~/.cache/ms-playwright
-                    key: patchright-chromium
+            - name: Cache patchright chromium
+              uses: actions/cache@v6
+              with:
+                  path: ~/.cache/ms-playwright
+                  key: patchright-chromium
 
-            -   name: Cache jars
-                uses: actions/cache@v6
-                with:
-                    path: bin
-                    key: jars-${{ hashFiles('package.json') }}
+            - name: Cache jars
+              uses: actions/cache@v6
+              with:
+                  path: bin
+                  key: jars-${{ hashFiles('package.json') }}
 
-            -   name: Install patchright browser
-                run: pnpm exec patchright install chromium
+            - name: Install patchright browser
+              run: pnpm exec patchright install chromium
 
-            -   name: Install NordVPN
-                run: |
-                    set -euo pipefail
+            - name: Install NordVPN
+              shell: bash
+              run: |
+                  set -euo pipefail
 
-                    curl -fsSL \
-                        https://downloads.nordcdn.com/apps/linux/install.sh \
-                        -o /tmp/nordvpn-install.sh
+                  curl -fsSL \
+                      https://downloads.nordcdn.com/apps/linux/install.sh \
+                      -o /tmp/nordvpn-install.sh
 
-                    sh /tmp/nordvpn-install.sh
+                  sh /tmp/nordvpn-install.sh
 
-                    sudo systemctl enable nordvpnd
-                    sudo systemctl start nordvpnd
+                  sudo groupadd -f nordvpn
+                  sudo usermod -aG nordvpn "$USER"
 
-                    for i in {1..30}; do
-                        if sudo systemctl is-active --quiet nordvpnd; then
-                            break
-                        fi
-                        sleep 2
-                    done
+                  sudo systemctl enable nordvpnd
+                  sudo systemctl restart nordvpnd
 
-                    sudo systemctl is-active --quiet nordvpnd
+                  for i in {1..30}; do
+                      if sudo systemctl is-active --quiet nordvpnd; then
+                          break
+                      fi
+                      sleep 2
+                  done
 
+                  sudo systemctl is-active --quiet nordvpnd
 
-            -   name: Connect to NordVPN US
-                env:
-                    NORDVPN_TOKEN: ${{ secrets.NORDVPN_TOKEN }}
-                run: |
-                    set -euo pipefail
+            - name: Connect to NordVPN US
+              shell: bash
+              env:
+                  NORDVPN_TOKEN: ${{ secrets.NORDVPN_TOKEN }}
+              run: |
+                  set -euo pipefail
 
-                    nordvpn login --token "$NORDVPN_TOKEN"
+                  nordvpn_cmd() {
+                      sg nordvpn -c "$1"
+                  }
 
-                    nordvpn set technology NordLynx
-                    nordvpn connect United_States
+                  nordvpn_cmd "nordvpn --version"
 
-                    for i in {1..30}; do
-                        if nordvpn status | grep -q "Connected"; then
-                            break
-                        fi
-                        sleep 2
-                    done
+                  nordvpn_cmd \
+                      "nordvpn login --token \"$NORDVPN_TOKEN\""
 
-                    nordvpn status
+                  nordvpn_cmd \
+                      "nordvpn set technology NordLynx"
 
-                    VPN_COUNTRY=$(curl -4fsS --max-time 15 \
-                        https://ipinfo.io/country)
+                  nordvpn_cmd \
+                      "nordvpn connect United_States"
 
-                    VPN_COUNTRY=$(printf '%s' "$VPN_COUNTRY" | tr -d '[:space:]')
+                  CONNECTED=false
 
-                    PUBLIC_IP=$(curl -4fsS --max-time 15 \
-                        https://api.ipify.org)
+                  for i in {1..30}; do
+                      STATUS=$(sg nordvpn -c 'nordvpn status' || true)
 
-                    echo "Public IP: $PUBLIC_IP"
-                    echo "VPN country: $VPN_COUNTRY"
+                      echo "$STATUS"
 
-                    if [ "$VPN_COUNTRY" != "US" ]; then
-                        echo "ERROR: NordVPN is not connected to the United States."
-                        exit 1
-                    fi
+                      if printf '%s\n' "$STATUS" | grep -q "Connected"; then
+                          CONNECTED=true
+                          break
+                      fi
 
-            -   name: Build APKs
-                env:
-                    DISPLAY: :99
-                run: |
-                    set -e
+                      sleep 2
+                  done
 
-                    Xvfb :99 -screen 0 1920x1080x24 &
+                  if [ "$CONNECTED" != "true" ]; then
+                      sg nordvpn -c 'nordvpn status' || true
+                      sudo journalctl \
+                          -u nordvpnd \
+                          --no-pager \
+                          -n 100 || true
+                      exit 1
+                  fi
 
-                    pnpm start
+                  sg nordvpn -c 'nordvpn status'
 
-            -   name: Disconnect NordVPN
-                if: always()
-                run: |
-                    sudo nordvpn disconnect || true
+                  VPN_COUNTRY=$(
+                      curl -4fsS \
+                          --max-time 15 \
+                          https://ipinfo.io/country
+                  )
 
-            -   name: Upload to Releases
-                uses: softprops/action-gh-release@v3
-                with:
-                    tag_name: ${{ github.run_id }}
-                    name: NPatch Build ${{ github.run_id }}
-                    files: build/*-npatched.apk
-                    generate_release_notes: true
+                  VPN_COUNTRY=$(
+                      printf '%s' "$VPN_COUNTRY" |
+                      tr -d '[:space:]'
+                  )
 
-            -   name: Delete old releases
-                uses: Nats-ji/delete-old-releases@v1
-                with:
-                    token: ${{ secrets.GITHUB_TOKEN }}
-                    keep-count: 1
-                    keep-old-minor-releases: false
-                    remove-tags: true
+                  PUBLIC_IP=$(
+                      curl -4fsS \
+                          --max-time 15 \
+                          https://api.ipify.org
+                  )
+
+                  echo "Public IP: $PUBLIC_IP"
+                  echo "VPN country: $VPN_COUNTRY"
+
+                  if [ "$VPN_COUNTRY" != "US" ]; then
+                      echo "ERROR: NordVPN is not connected to the United States."
+                      exit 1
+                  fi
+
+            - name: Build APKs
+              env:
+                  DISPLAY: :99
+              run: |
+                  set -euo pipefail
+
+                  Xvfb :99 \
+                      -screen 0 1920x1080x24 \
+                      > /tmp/xvfb.log 2>&1 &
+
+                  XVFB_PID=$!
+
+                  trap 'kill "$XVFB_PID" 2>/dev/null || true' EXIT
+
+                  sleep 2
+
+                  if ! kill -0 "$XVFB_PID" 2>/dev/null; then
+                      cat /tmp/xvfb.log || true
+                      exit 1
+                  fi
+
+                  pnpm start
+
+            - name: Disconnect NordVPN
+              if: always()
+              shell: bash
+              run: |
+                  set +e
+                  sg nordvpn -c 'nordvpn disconnect'
+
+            - name: Upload to Releases
+              uses: softprops/action-gh-release@v3
+              with:
+                  tag_name: ${{ github.run_id }}
+                  name: NPatch Build ${{ github.run_id }}
+                  files: build/*-npatched.apk
+                  generate_release_notes: true
+
+            - name: Delete old releases
+              uses: Nats-ji/delete-old-releases@v1
+              with:
+                  token: ${{ secrets.GITHUB_TOKEN }}
+                  keep-count: 1
+                  keep-old-minor-releases: false
+                  remove-tags: true
