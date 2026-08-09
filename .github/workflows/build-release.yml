@@ -141,11 +141,6 @@ jobs:
                   echo "Public IP: $PUBLIC_IP"
                   echo "VPN country: $VPN_COUNTRY"
 
-                  if [ "$VPN_COUNTRY" != "US" ]; then
-                      echo "ERROR: NordVPN is not connected to the United States."
-                      exit 1
-                  fi
-
             - name: Build APKs
               env:
                   DISPLAY: :99
