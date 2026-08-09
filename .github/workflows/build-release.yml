@@ -49,7 +49,7 @@ jobs:
 
             -   name: Connect NordVPN
                 id: vpn
-                uses: pau-vega/nordvpn-action@nordvpn-v1
+                uses: pau-vega/nordvpn-action@nordvpn-v1.0.0
                 with:
                     region: US
                     username: ${{ secrets.NORDVPN_SERVICE_USERNAME }}
@@ -64,7 +64,7 @@ jobs:
 
             -   name: Disconnect VPN
                 if: always()
-                uses: pau-vega/nordvpn-action/disconnect@nordvpn-v1
+                uses: pau-vega/nordvpn-action/disconnect@nordvpn-v1.0.0
 
             -   name: Upload to Releases
                 uses: softprops/action-gh-release@v3
