@@ -121,26 +121,6 @@ jobs:
 
                   sg nordvpn -c 'nordvpn status'
 
-                  VPN_COUNTRY=$(
-                      curl -4fsS \
-                          --max-time 15 \
-                          https://ipinfo.io/country
-                  )
-
-                  VPN_COUNTRY=$(
-                      printf '%s' "$VPN_COUNTRY" |
-                      tr -d '[:space:]'
-                  )
-
-                  PUBLIC_IP=$(
-                      curl -4fsS \
-                          --max-time 15 \
-                          https://api.ipify.org
-                  )
-
-                  echo "Public IP: $PUBLIC_IP"
-                  echo "VPN country: $VPN_COUNTRY"
-
             - name: Build APKs
               env:
                   DISPLAY: :99
