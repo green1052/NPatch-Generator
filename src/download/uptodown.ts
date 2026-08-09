@@ -1,6 +1,7 @@
 import {join} from "node:path";
 import pLimit from "p-limit";
 import {type Browser, chromium, type Page} from "patchright";
+import {newInjectedContext} from "fingerprint-injector";
 import {downloadFile} from "../util.js";
 import {consola} from "consola";
 import type {DownloadContext, DownloadResult} from "./types.js";
@@ -111,13 +112,17 @@ export const downloadUptodown: (ctx: DownloadContext) => Promise<DownloadResult>
 
         // ponytail: headful required for bot protection bypass
         const browser: Browser = await chromium.launch({headless: false});
-        const context = await browser.newContext({
-            locale: "ko-KR",
-            timezoneId: "Asia/Seoul",
-            geolocation: {latitude: 37.5665, longitude: 126.9780},
-            permissions: ["geolocation"],
-            viewport: {width: 1920, height: 1080},
-            screen: {width: 1920, height: 1080}
+        const context = await newInjectedContext(browser, {
+            fingerprintOptions: {
+                devices: ["desktop"],
+                operatingSystems: ["windows"]
+            },
+            newContextOptions: {
+                locale: "en-US",
+                timezoneId: "America/New_York",
+                geolocation: {latitude: 40.7128, longitude: -74.006},
+                permissions: ["geolocation"]
+            }
         });
         const page: Page = await context.newPage();
 
@@ -163,7 +168,7 @@ export const downloadUptodown: (ctx: DownloadContext) => Promise<DownloadResult>
 
             consola.success(`Uptodown: downloading ${dlInfo.url}`);
             const cookies = await context.cookies();
-            const cookieStr = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+            const cookieStr = cookies.map((c: {name: string; value: string}) => `${c.name}=${c.value}`).join("; ");
             const userAgent = await page.evaluate(() => navigator.userAgent);
 
             await downloadFile(dlInfo.url, outPath, {

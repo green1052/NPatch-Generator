@@ -24,7 +24,7 @@
             "sources": [
                 {
                     "type": "uptodown",
-                    "url": "https://dcinside.kr.uptodown.com/android"
+                    "url": "https://dcinside.en.uptodown.com/android"
                 }
             ]
         },
@@ -33,7 +33,7 @@
             "sources": [
                 {
                     "type": "uptodown",
-                    "url": "https://com-novelpia-android-me.kr.uptodown.com/android"
+                    "url": "https://com-novelpia-android-me.en.uptodown.com/android"
                 }
             ]
         }
