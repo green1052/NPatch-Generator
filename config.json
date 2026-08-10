@@ -4,7 +4,7 @@
     "npatchVersion": "latest",
     "apkeditorVersion": "latest",
     "bcVersion": "latest",
-    "concurrency": 1,
+    "concurrency": 3,
     "apps": [
         {
             "packageName": "com.discord",
@@ -21,6 +21,9 @@
         },
         {
             "packageName": "com.dcinside.app.android",
+            "npatchArgs": {
+                "sigbypassLevel": 2
+            },
             "sources": [
                 {
                     "type": "uptodown",
@@ -30,6 +33,9 @@
         },
         {
             "packageName": "com.novelpia.android.me",
+            "npatchArgs": {
+                "sigbypassLevel": 0
+            },
             "sources": [
                 {
                     "type": "uptodown",

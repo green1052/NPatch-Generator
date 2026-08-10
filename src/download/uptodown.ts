@@ -1,8 +1,9 @@
-import {join} from "node:path";
+import {dirname, join} from "node:path";
+import {readdirSync, renameSync, statSync} from "node:fs";
 import pLimit from "p-limit";
 import {Camoufox} from "camoufox-js";
 import type {Browser, Page} from "playwright-core";
-import {downloadFile} from "../util.js";
+import {ensureDir} from "../util.js";
 import {consola} from "consola";
 import type {DownloadContext, DownloadResult} from "./types.js";
 
@@ -51,14 +52,18 @@ async function scrapeUptodownVersions(
 }
 
 /**
- * Navigate to a version's download page and resolve the final APK/XAPK URL.
- * Reads the download token directly from the button's data-url attribute —
- * the AJAX endpoint (/ajax/app/.../download-url) doesn't fire in headless Firefox.
+ * Navigate to a version's download page, click download button, capture the
+ * download URL via `<a>` href hook, then trigger browser saveAs via page.goto.
+ * Same pattern as apkmirror.ts — browser handles Turnstile + AJAX, we handle
+ * download via page.goto + file polling (Playwright Firefox doesn't fire
+ * download events for programmatic `<a>.click()`).
  */
-async function resolveDownloadUrl(
+async function downloadViaBrowser(
     page: Page,
-    downloadPageUrl: string
-): Promise<{ url: string; isXapk: boolean } | null> {
+    downloadPageUrl: string,
+    workDir: string,
+    outName: string
+): Promise<{ path: string; isXapk: boolean } | null> {
     consola.success(`Uptodown: resolving download from ${downloadPageUrl}`);
     await page.goto(downloadPageUrl, {waitUntil: "domcontentloaded", timeout: 60000});
     await page.waitForTimeout(3000);
@@ -66,25 +71,119 @@ async function resolveDownloadUrl(
     // Dismiss cookie consent overlay (blocks download button click).
     await page.evaluate(() => {
         document.querySelector("#cookiescript_injected_wrapper")?.remove();
+        // Download button has `pointer-events: none` by default (CSS anti-bot delay).
+        // Adding 'turbo' class to body removes this restriction.
+        document.body.classList.add("turbo");
     });
 
-    // Read download token directly from button data-url — no AJAX needed.
+    // Check button exists + read isXapk + detect "with Uptodown app store" variant
     const btnAttrs = await page.evaluate(() => {
         const el = document.querySelector("#detail-download-button");
         if (!el) return null;
+        // If button says "with Uptodown app store", it downloads the store app, not the target app.
+        // The real app variant URL is the download page URL + "-x".
+        const isStoreApp = /uptodown app store/i.test(el.textContent ?? "");
         return {
-            dataUrl: el.getAttribute("data-url") ?? "",
             onlyXapk: el.getAttribute("data-only-xapk") === "1",
-            exists: true
+            exists: true,
+            isStoreApp
+        };
+    });
+    if (!btnAttrs?.exists) return null;
+
+    // If the download button serves the Uptodown store app, navigate to the real variant page.
+    // Variant URL = download page URL + "-x" (e.g. /download/1197234650 → /download/1197234650-x)
+    if (btnAttrs.isStoreApp) {
+        const variantUrl = `${downloadPageUrl}-x`;
+        consola.success(`Uptodown: main button is store app, navigating to variant: ${variantUrl}`);
+        await page.goto(variantUrl, {waitUntil: "domcontentloaded", timeout: 60000});
+        await page.waitForTimeout(3000);
+        await page.evaluate(() => {
+            document.querySelector("#cookiescript_injected_wrapper")?.remove();
+            document.body.classList.add("turbo");
+        });
+    }
+
+    // Inject hook to capture the `<a>` href that download.js creates on click.
+    // Both direct path (he) and AJAX path (ke) end by creating `<a>` with
+    // href = "https://dw.uptodown.com/dwn/..." and calling .click().
+    await page.evaluate(() => {
+        (window as any).__capturedDownloadUrl = null;
+        const origClick = HTMLAnchorElement.prototype.click;
+        HTMLAnchorElement.prototype.click = function() {
+            if (this.href && this.href.includes("dw.uptodown.com/dwn/")) {
+                (window as any).__capturedDownloadUrl = this.href;
+            }
+            return origClick.call(this);
         };
     });
 
-    if (!btnAttrs?.exists || !btnAttrs.dataUrl) return null;
+    consola.success(`Uptodown: clicking download button...`);
+    try {
+        await page.locator("#detail-download-button").click({force: true, timeout: 10000});
+    } catch {
+        // Navigation throws for download responses — expected
+    }
 
-    return {
-        url: `https://dw.uptodown.com/dwn/${btnAttrs.dataUrl}`,
-        isXapk: btnAttrs.onlyXapk
-    };
+    // Wait for the href to be captured (Turnstile + AJAX can take time)
+    const deadline = Date.now() + 120000;
+    let downloadUrl: string | null = null;
+    while (Date.now() < deadline) {
+        await page.waitForTimeout(2000);
+        downloadUrl = await page.evaluate(() => (window as any).__capturedDownloadUrl);
+        if (downloadUrl) break;
+    }
+
+    if (!downloadUrl) {
+        throw new Error("Uptodown: download URL not captured (Turnstile may not have solved)");
+    }
+
+    consola.success(`Uptodown: captured download URL, triggering browser download...`);
+
+    // Trigger browser saveAs via page.goto (same as apkmirror.ts).
+    // Firefox downloads the file to downloadsPath when navigating to a download URL.
+    const filesBefore = new Set(readdirSync(workDir));
+    try {
+        await page.goto(downloadUrl, {waitUntil: "commit", timeout: 60000});
+    } catch {
+        // Navigation throws for download responses — expected
+    }
+
+    // Wait for new file to appear and stop growing
+    const dlDeadline = Date.now() + 120000;
+    let downloadedFile: string | null = null;
+    let lastSize = 0;
+    let stableCount = 0;
+    while (Date.now() < dlDeadline) {
+        await page.waitForTimeout(2000);
+        const filesAfter = readdirSync(workDir);
+        const newFiles = filesAfter.filter((f) => !filesBefore.has(f));
+        if (newFiles.length > 0) {
+            const candidate = newFiles[0]!;
+            const fullCandidate = join(workDir, candidate);
+            const size = statSync(fullCandidate).size;
+            if (size === lastSize && size > 0) {
+                stableCount++;
+                if (stableCount >= 2) {
+                    downloadedFile = fullCandidate;
+                    break;
+                }
+            } else {
+                stableCount = 0;
+                lastSize = size;
+            }
+        }
+    }
+
+    if (!downloadedFile) {
+        throw new Error("Uptodown: download timed out or no file appeared");
+    }
+
+    const outPath = join(workDir, outName);
+    ensureDir(dirname(outPath));
+    renameSync(downloadedFile, outPath);
+
+    return {path: outPath, isXapk: btnAttrs.onlyXapk};
 }
 
 /**
@@ -102,6 +201,7 @@ export const downloadUptodown: (ctx: DownloadContext) => Promise<DownloadResult>
             headless: true,
             os: "windows",
             locale: "en-US",
+            downloadsPath: ctx.workDir,
         });
         const page: Page = await browser.newPage();
 
@@ -132,35 +232,24 @@ export const downloadUptodown: (ctx: DownloadContext) => Promise<DownloadResult>
 
             consola.success(`Uptodown: selected version ${target.version} for ${ctx.app.packageName}`);
 
-            const dlInfo = await resolveDownloadUrl(page, target.downloadPageUrl);
+            const ext = target.isXapk ? ".xapk" : ".apk";
+            const dlInfo = await downloadViaBrowser(
+                page,
+                target.downloadPageUrl,
+                ctx.workDir,
+                `${ctx.app.packageName}-${target.version}-${arch}${ext}`
+            );
             if (!dlInfo) {
                 throw new Error(
                     `uptodown: no matching APK found for ${ctx.app.packageName} ${target.version} (arch=${arch})`
                 );
             }
 
-            const ext = dlInfo.isXapk ? ".xapk" : ".apk";
-            const outPath = join(
-                ctx.workDir,
-                `${ctx.app.packageName}-${target.version}-${arch}${ext}`
-            );
-
-            consola.success(`Uptodown: downloading ${dlInfo.url}`);
-            const cookies = await page.context().cookies();
-            const cookieStr = cookies.map((c: {name: string; value: string}) => `${c.name}=${c.value}`).join("; ");
-            const userAgent = await page.evaluate(() => navigator.userAgent);
-
-            await downloadFile(dlInfo.url, outPath, {
-                Cookie: cookieStr,
-                "User-Agent": userAgent,
-                Referer: source.url
-            });
-
             return {
-                apkPath: outPath,
+                apkPath: dlInfo.path,
                 version: target.version,
                 isSplit: dlInfo.isXapk,
-                ...(dlInfo.isXapk ? {splitPath: outPath} : {})
+                ...(dlInfo.isXapk ? {splitPath: dlInfo.path} : {})
             };
         } finally {
             await browser.close();
