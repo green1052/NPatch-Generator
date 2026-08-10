@@ -8,10 +8,14 @@ on:
 permissions:
     contents: write
 
+concurrency:
+    group: build
+    cancel-in-progress: true
+
 jobs:
     build:
         runs-on: ubuntu-latest
-        timeout-minutes: 60
+        timeout-minutes: 30
 
         steps:
             -   name: Checkout
@@ -39,7 +43,7 @@ jobs:
                 uses: actions/cache@v6
                 with:
                     path: ~/.cache/camoufox
-                    key: camoufox
+                    key: camoufox-${{ hashFiles('pnpm-lock.yaml') }}
 
             -   name: Cache jars
                 uses: actions/cache@v6
@@ -48,32 +52,19 @@ jobs:
                     key: jars-${{ hashFiles('package.json') }}
 
             -   name: Install camoufox browser
-                run: npx camoufox-js fetch
+                run: pnpm exec camoufox-js fetch
 
             -   name: Install NordVPN
                 shell: bash
                 run: |
                     set -euo pipefail
-                    
-                    curl -fsSL \
-                        https://downloads.nordcdn.com/apps/linux/install.sh \
-                        -o /tmp/nordvpn-install.sh
-                    
-                    sh /tmp/nordvpn-install.sh
-                    
-                    sudo groupadd -f nordvpn
-                    sudo usermod -aG nordvpn "$USER"
-                    
-                    sudo systemctl enable nordvpnd
-                    sudo systemctl restart nordvpnd
-                    
-                    for i in {1..30}; do
-                        if sudo systemctl is-active --quiet nordvpnd; then
-                            break
-                        fi
+                    curl -fsSL https://downloads.nordcdn.com/apps/linux/install.sh | sh
+                    sudo groupadd -f nordvpn && sudo usermod -aG nordvpn "$USER"
+                    sudo systemctl enable --now nordvpnd
+                    for i in {1..15}; do
+                        sudo systemctl is-active --quiet nordvpnd && break
                         sleep 2
                     done
-                    
                     sudo systemctl is-active --quiet nordvpnd
 
             -   name: Connect to NordVPN
@@ -82,67 +73,19 @@ jobs:
                     NORDVPN_TOKEN: ${{ secrets.NORDVPN_TOKEN }}
                 run: |
                     set -euo pipefail
-                    
-                    nordvpn_cmd() {
-                        sg nordvpn -c "$1"
-                    }
-                    
-                    nordvpn_cmd "nordvpn --version"
-                    
-                    nordvpn_cmd \
-                        "nordvpn login --token \"$NORDVPN_TOKEN\""
-                    
-                    nordvpn_cmd \
-                        "nordvpn connect United_States"
-                    
-                    CONNECTED=false
-                    
-                    for i in {1..30}; do
+                    sg nordvpn -c "nordvpn login --token \"$NORDVPN_TOKEN\""
+                    sg nordvpn -c "nordvpn connect United_States"
+                    for i in {1..15}; do
                         STATUS=$(sg nordvpn -c 'nordvpn status' || true)
-                    
                         echo "$STATUS"
-                    
-                        if printf '%s\n' "$STATUS" | grep -q "Connected"; then
-                            CONNECTED=true
-                            break
-                        fi
-                    
+                        grep -q "Connected" <<< "$STATUS" && exit 0
                         sleep 2
                     done
-                    
-                    if [ "$CONNECTED" != "true" ]; then
-                        sg nordvpn -c 'nordvpn status' || true
-                        sudo journalctl \
-                            -u nordvpnd \
-                            --no-pager \
-                            -n 100 || true
-                        exit 1
-                    fi
-                    
-                    sg nordvpn -c 'nordvpn status'
+                    sudo journalctl -u nordvpnd --no-pager -n 50 || true
+                    exit 1
 
             -   name: Build APKs
-                env:
-                    DISPLAY: :99
-                run: |
-                    set -euo pipefail
-                    
-                    Xvfb :99 \
-                        -screen 0 1920x1080x24 \
-                        > /tmp/xvfb.log 2>&1 &
-                    
-                    XVFB_PID=$!
-                    
-                    trap 'kill "$XVFB_PID" 2>/dev/null || true' EXIT
-                    
-                    sleep 2
-                    
-                    if ! kill -0 "$XVFB_PID" 2>/dev/null; then
-                        cat /tmp/xvfb.log || true
-                        exit 1
-                    fi
-                    
-                    pnpm start
+                run: pnpm start
 
             -   name: Disconnect NordVPN
                 if: always()
