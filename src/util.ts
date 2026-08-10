@@ -45,22 +45,38 @@ export function checkJava(): { ok: boolean; version: string } {
 /**
  * Download file via got.stream (streaming to disk with backpressure).
  * Writes to a .tmp file then renames (prevents partial downloads).
+ * Retries on truncation/network errors (GitHub CDN often drops mid-stream).
+ * HTTP/2 enabled for better multiplexing on GitHub CDN.
  */
 export async function downloadFile(
     url: string,
     dest: string,
-    headers?: Record<string, string>
+    headers?: Record<string, string>,
+    retries: number = 3
 ): Promise<void> {
     ensureDir(dirname(dest));
     const tmp = dest + ".tmp";
-
-    const ws = createWriteStream(tmp);
-    await pipeline(
-        got.stream(url, {headers: headers ?? {}}),
-        ws
-    );
-
-    renameSync(tmp, dest);
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            const ws = createWriteStream(tmp);
+            await pipeline(
+                got.stream(url, {
+                    headers: headers ?? {},
+                    http2: true,
+                }),
+                ws
+            );
+            renameSync(tmp, dest);
+            return;
+        } catch (e) {
+            lastError = e;
+            if (attempt < retries) {
+                await new Promise((r) => setTimeout(r, 1000 * attempt));
+            }
+        }
+    }
+    throw lastError;
 }
 
 /**
