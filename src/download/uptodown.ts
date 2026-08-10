@@ -1,7 +1,7 @@
 import {join} from "node:path";
 import pLimit from "p-limit";
-import {type Browser, chromium, type Page} from "patchright";
-import {newInjectedContext} from "fingerprint-injector";
+import {Camoufox} from "camoufox-js";
+import type {Browser, Page} from "playwright-core";
 import {downloadFile} from "../util.js";
 import {consola} from "consola";
 import type {DownloadContext, DownloadResult} from "./types.js";
@@ -52,7 +52,8 @@ async function scrapeUptodownVersions(
 
 /**
  * Navigate to a version's download page and resolve the final APK/XAPK URL.
- * Clicks the download button and intercepts the AJAX response (POST with CSRF token).
+ * Reads the download token directly from the button's data-url attribute —
+ * the AJAX endpoint (/ajax/app/.../download-url) doesn't fire in headless Firefox.
  */
 async function resolveDownloadUrl(
     page: Page,
@@ -62,45 +63,32 @@ async function resolveDownloadUrl(
     await page.goto(downloadPageUrl, {waitUntil: "domcontentloaded", timeout: 60000});
     await page.waitForTimeout(3000);
 
-    // Read download button attributes
+    // Dismiss cookie consent overlay (blocks download button click).
+    await page.evaluate(() => {
+        document.querySelector("#cookiescript_injected_wrapper")?.remove();
+    });
+
+    // Read download token directly from button data-url — no AJAX needed.
     const btnAttrs = await page.evaluate(() => {
         const el = document.querySelector("#detail-download-button");
         if (!el) return null;
         return {
+            dataUrl: el.getAttribute("data-url") ?? "",
             onlyXapk: el.getAttribute("data-only-xapk") === "1",
             exists: true
         };
     });
 
-    if (!btnAttrs?.exists) return null;
-
-    // Set up response listener for the AJAX download-url call, then click the button.
-    // Use evaluate().click() instead of locator.click() — xvfb actionability checks fail on CI.
-    const responsePromise = page.waitForResponse(
-        (r) => r.url().includes("/ajax/app/") && r.url().includes("/download-url"),
-        {timeout: 120000}
-    );
-    await page.evaluate(() => {
-        (document.querySelector("#detail-download-button") as HTMLElement)?.click();
-    });
-    const response = await responsePromise;
-
-    if (!response.ok()) return null;
-    const body = await response.json();
-    if (!body.success) return null;
-
-    const downloadURL = body.data?.downloadURL;
-    if (!downloadURL) return null;
+    if (!btnAttrs?.exists || !btnAttrs.dataUrl) return null;
 
     return {
-        url: `https://dw.uptodown.com/dwn/${downloadURL}`,
+        url: `https://dw.uptodown.com/dwn/${btnAttrs.dataUrl}`,
         isXapk: btnAttrs.onlyXapk
     };
 }
 
 /**
- * Download APK from Uptodown using patchright (bot-check bypass).
- * Must use headful mode - Cloudflare/bot protection blocks headless.
+ * Download APK from Uptodown using Camoufox (bot-check bypass).
  */
 export const downloadUptodown: (ctx: DownloadContext) => Promise<DownloadResult> =
     (ctx: DownloadContext): Promise<DownloadResult> => downloadLimit(async (): Promise<DownloadResult> => {
@@ -110,21 +98,12 @@ export const downloadUptodown: (ctx: DownloadContext) => Promise<DownloadResult>
         const arch = ctx.app.arch ?? "all";
         const versionsUrl = `${source.url}/versions`;
 
-        // ponytail: headful required for bot protection bypass
-        const browser: Browser = await chromium.launch({headless: false});
-        const context = await newInjectedContext(browser, {
-            fingerprintOptions: {
-                devices: ["desktop"],
-                operatingSystems: ["windows"]
-            },
-            newContextOptions: {
-                locale: "en-US",
-                timezoneId: "America/New_York",
-                geolocation: {latitude: 40.7128, longitude: -74.006},
-                permissions: ["geolocation"]
-            }
+        const browser: Browser = await Camoufox({
+            headless: true,
+            os: "windows",
+            locale: "en-US",
         });
-        const page: Page = await context.newPage();
+        const page: Page = await browser.newPage();
 
         try {
             const versions = await scrapeUptodownVersions(page, versionsUrl);
@@ -167,7 +146,7 @@ export const downloadUptodown: (ctx: DownloadContext) => Promise<DownloadResult>
             );
 
             consola.success(`Uptodown: downloading ${dlInfo.url}`);
-            const cookies = await context.cookies();
+            const cookies = await page.context().cookies();
             const cookieStr = cookies.map((c: {name: string; value: string}) => `${c.name}=${c.value}`).join("; ");
             const userAgent = await page.evaluate(() => navigator.userAgent);
 

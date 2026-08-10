@@ -35,11 +35,11 @@ jobs:
             -   name: Install dependencies
                 run: pnpm install --frozen-lockfile
 
-            -   name: Cache patchright chromium
+            -   name: Cache camoufox browser
                 uses: actions/cache@v6
                 with:
-                    path: ~/.cache/ms-playwright
-                    key: patchright-chromium
+                    path: ~/.cache/camoufox
+                    key: camoufox
 
             -   name: Cache jars
                 uses: actions/cache@v6
@@ -47,8 +47,8 @@ jobs:
                     path: bin
                     key: jars-${{ hashFiles('package.json') }}
 
-            -   name: Install patchright browser
-                run: pnpm exec patchright install chromium
+            -   name: Install camoufox browser
+                run: npx camoufox-js fetch
 
             -   name: Install NordVPN
                 shell: bash

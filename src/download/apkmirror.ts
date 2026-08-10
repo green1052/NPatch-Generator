@@ -1,7 +1,7 @@
 import {dirname, join} from "node:path";
-import {existsSync, readdirSync, renameSync, statSync} from "node:fs";
-import {type Browser, chromium, type Page} from "patchright";
-import {newInjectedContext} from "fingerprint-injector";
+import {readdirSync, renameSync, statSync} from "node:fs";
+import {Camoufox} from "camoufox-js";
+import type {Browser, Page} from "playwright-core";
 import {compareVersions, ensureDir} from "../util.js";
 import {consola} from "consola";
 import type {DownloadContext, DownloadResult} from "./types.js";
@@ -167,7 +167,7 @@ async function findApkDownloadUrl(
 }
 
 /**
- * Download APK from APKMirror using patchright (bot-check bypass).
+ * Download APK from APKMirror using Camoufox (bot-check bypass).
  * Uses browser saveAs for download to bypass 403 on direct fetch.
  * Must use headful mode - Cloudflare challenge blocks headless.
  */
@@ -180,21 +180,13 @@ export const downloadApkmirror: (ctx: DownloadContext) => Promise<DownloadResult
         const dpi = ctx.app.dpi ?? "nodpi";
         const includeBeta = ctx.app.includeBeta ?? false;
 
-        // ponytail: headful required for Cloudflare bypass, downloadsPath for auto-download
-        const browser: Browser = await chromium.launch({headless: false, downloadsPath: ctx.workDir});
-        const context = await newInjectedContext(browser, {
-            fingerprintOptions: {
-                devices: ["desktop"],
-                operatingSystems: ["windows"]
-            },
-            newContextOptions: {
-                locale: "en-US",
-                timezoneId: "America/New_York",
-                geolocation: {latitude: 40.7128, longitude: -74.006},
-                permissions: ["geolocation"]
-            }
+        const browser: Browser = await Camoufox({
+            headless: true,
+            os: "windows",
+            locale: "en-US",
+            downloadsPath: ctx.workDir,
         });
-        const page: Page = await context.newPage();
+        const page: Page = await browser.newPage();
 
         try {
             const versions = await scrapeVersions(page, source.url, includeBeta);

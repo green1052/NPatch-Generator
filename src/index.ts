@@ -115,7 +115,7 @@ async function main(): Promise<void> {
         config.apkeditorVersion ?? "latest"
     );
 
-    // Process apps in parallel (patchright launches a browser per scraper)
+    // Process apps in parallel (Camoufox launches a browser per scraper)
     const limit = pLimit(config.concurrency ?? 3);
     consola.info(`Processing ${config.apps.length} app(s)...`);
 

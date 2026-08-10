@@ -8,7 +8,7 @@ Automated APK patcher that downloads APKs from multiple sources and applies [NPa
 - **Split APK handling**: merges `.apkm`/`.xapk` via APKEditor before patching
 - **BouncyCastle auto-setup**: resolves latest BC provider from Maven Central for BKS keystore
 - **Parallel processing**: configurable concurrency via `p-limit`
-- **Headful browser bypass**: patchright (Playwright fork) for Cloudflare/Uptodown bot detection
+- **Headful browser bypass**: Camoufox (Firefox anti-detect) for Cloudflare/Uptodown bot detection
 - **Config-driven**: JSON config with global + per-app NPatch args merge
 
 ## Requirements
@@ -21,7 +21,7 @@ Automated APK patcher that downloads APKs from multiple sources and applies [NPa
 
 ```bash
 pnpm install
-pnpm exec patchright install chromium
+npx camoufox-js fetch
 ```
 
 ## Usage
