@@ -7,6 +7,55 @@ import {resolveNpatchArgs} from "./config.js";
 import type {DownloadResult} from "./download/types.js";
 
 /**
+ * Sign an APK with debug keystore (v1 signature) so NPatch can read original signature.
+ * Used for single APKs with sigbypass > 0 (Uptodown APKs may use v2/v3 only).
+ */
+async function signApk(
+    apkeditorJar: string,
+    apkPath: string,
+    sigbypassLevel: number
+): Promise<string> {
+    const debugKeystore = join(dirname(apkeditorJar), "debug.keystore");
+    if (!existsSync(debugKeystore)) {
+        consola.success("Generating debug keystore for signing...");
+        await runCommand(
+            "keytool",
+            [
+                "-genkeypair",
+                "-keystore", debugKeystore,
+                "-storepass", "android",
+                "-alias", "androiddebugkey",
+                "-keypass", "android",
+                "-keyalg", "RSA",
+                "-keysize", "2048",
+                "-validity", "10000",
+                "-dname", "CN=Android Debug,O=Android,C=US"
+            ],
+            undefined,
+            false
+        );
+    }
+
+    consola.success("Signing APK with debug keystore...");
+    await runCommand(
+        "jarsigner",
+        [
+            "-keystore", debugKeystore,
+            "-storepass", "android",
+            "-keypass", "android",
+            "-sigalg", "SHA256withRSA",
+            "-digestalg", "SHA-256",
+            apkPath,
+            "androiddebugkey"
+        ],
+        undefined,
+        false
+    );
+
+    return apkPath;
+}
+
+/**
  * Merge a split APK bundle (.apkm/.xapk) into a single APK using APKEditor.
  * Then zipalign and sign with debug keystore so NPatch can read original signature.
  * Returns path to the merged, aligned, signed APK.
@@ -38,42 +87,7 @@ export async function mergeSplitApk(
     // sigbypass > 0 needs original signature — sign with debug keystore so NPatch can read it.
     // sigbypass 0 skips signature reading — no jarsigner needed.
     if (sigbypassLevel > 0) {
-        const debugKeystore = join(dirname(apkeditorJar), "debug.keystore");
-        if (!existsSync(debugKeystore)) {
-            consola.success("Generating debug keystore for signing...");
-            await runCommand(
-                "keytool",
-                [
-                    "-genkeypair",
-                    "-keystore", debugKeystore,
-                    "-storepass", "android",
-                    "-alias", "androiddebugkey",
-                    "-keypass", "android",
-                    "-keyalg", "RSA",
-                    "-keysize", "2048",
-                    "-validity", "10000",
-                    "-dname", "CN=Android Debug,O=Android,C=US"
-                ],
-                undefined,
-                false
-            );
-        }
-
-        consola.success("Signing merged APK with debug keystore...");
-        await runCommand(
-            "jarsigner",
-            [
-                "-keystore", debugKeystore,
-                "-storepass", "android",
-                "-keypass", "android",
-                "-sigalg", "SHA256withRSA",
-                "-digestalg", "SHA-256",
-                mergedPath,
-                "androiddebugkey"
-            ],
-            undefined,
-            false
-        );
+        await signApk(apkeditorJar, mergedPath, sigbypassLevel);
     }
 
     consola.success(`Merged APK: ${mergedPath}`);
@@ -145,10 +159,11 @@ export async function patchApk(
 
     const npatchArgs = resolveNpatchArgs(app, globalNpatchArgs);
 
-    // .apkm = multi-APK bundle, needs APKEditor merge + zipalign + sign.
-    // .xapk = single APK structure (NPatch handles directly, no merge needed).
-    if (download.isSplit && download.splitPath && download.splitPath.endsWith(".apkm")) {
-        apkPath = await mergeSplitApk(apkeditorJar, download.splitPath, outputDir, npatchArgs.sigbypassLevel);
+    // .apkm/.xapk = multi-APK bundle, needs APKEditor merge + zipalign + sign.
+    // Check by file extension on apkPath — isSplit/splitPath flags may be wrong
+    // (variant page button may not set data-only-xapk, so isXapk=false, splitPath undefined).
+    if (/\.(apkm|xapk)$/i.test(apkPath)) {
+        apkPath = await mergeSplitApk(apkeditorJar, apkPath, outputDir, npatchArgs.sigbypassLevel);
     }
 
     if (!existsSync(apkPath)) {

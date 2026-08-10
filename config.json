@@ -20,18 +20,6 @@
             ]
         },
         {
-            "packageName": "com.dcinside.app.android",
-            "npatchArgs": {
-                "sigbypassLevel": 2
-            },
-            "sources": [
-                {
-                    "type": "uptodown",
-                    "url": "https://dcinside.en.uptodown.com/android"
-                }
-            ]
-        },
-        {
             "packageName": "com.novelpia.android.me",
             "npatchArgs": {
                 "sigbypassLevel": 0
