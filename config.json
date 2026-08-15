@@ -18,18 +18,6 @@
                     "url": "https://tracker.vendetta.rocks"
                 }
             ]
-        },
-        {
-            "packageName": "com.novelpia.android.me",
-            "npatchArgs": {
-                "sigbypassLevel": 0
-            },
-            "sources": [
-                {
-                    "type": "uptodown",
-                    "url": "https://com-novelpia-android-me.en.uptodown.com/android"
-                }
-            ]
         }
     ]
 }
