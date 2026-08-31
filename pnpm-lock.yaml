@@ -24,8 +24,8 @@ importers:
         specifier: ^16.0.0
         version: 16.0.0
       p-limit:
-        specifier: ^7.3.1
-        version: 7.3.1
+        specifier: ^7.3.2
+        version: 7.3.2
       playwright-core:
         specifier: <1.61.0
         version: 1.60.0
@@ -630,8 +630,8 @@ packages:
     resolution: {integrity: sha512-dD4UpyBh/9m4X2NVjA+73/ZPBRF+uF4zIMFvvQsabMiEK8x41L3rQ8EENOi35kyyoaJwNxEeJcP6Fj1H4U409Q==}
     engines: {node: '>=12'}
 
-  p-limit@7.3.1:
-    resolution: {integrity: sha512-0trZaiG7Y7kN/Egy9a8j47t9osC0Tch4PaIWd9yGF6bvmlk7muExRvGNYb8sXBwEKMoNKsbNN9P8EefuQekE4Q==}
+  p-limit@7.3.2:
+    resolution: {integrity: sha512-Ll0w3fU24vYpXoZmjjZIee6bJQDgG0oAyo1PdmFYI8UDwJJddaHAypxIH9avUu+t+lSsAwKVsb1jDCMIIChliw==}
     engines: {node: '>=20'}
 
   parse-ms@4.0.0:
@@ -1198,7 +1198,7 @@ snapshots:
       lodash.isequal: 4.5.0
       vali-date: 1.0.0
 
-  p-limit@7.3.1:
+  p-limit@7.3.2:
     dependencies:
       yocto-queue: 1.2.2
 
