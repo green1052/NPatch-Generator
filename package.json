@@ -2,7 +2,7 @@
     "name": "npatch-generator",
     "version": "1.0.0",
     "type": "module",
-    "packageManager": "pnpm@11.25.0",
+    "packageManager": "pnpm@12.3.4",
     "scripts": {
         "start": "tsx src/index.ts",
         "build": "tsc"
