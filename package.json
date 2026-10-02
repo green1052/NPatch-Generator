@@ -9,7 +9,7 @@
     },
     "devDependencies": {
         "@types/adm-zip": "^0.5.8",
-        "@types/node": "^26.6.3",
+        "@types/node": "^26.6.4",
         "tsx": "^4.23.15",
         "typescript": "^7.0.2"
     },
