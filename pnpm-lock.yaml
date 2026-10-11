@@ -189,8 +189,8 @@ importers:
         version: 1.60.0
     devDependencies:
       '@types/adm-zip':
-        specifier: ^0.5.8
-        version: 0.5.8
+        specifier: ^0.6.0
+        version: 0.6.0
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.5
@@ -377,8 +377,9 @@ packages:
     resolution: {integrity: sha512-tlqY9xq5ukxTUZBmoOp+m61cqwQD5pHJtFY3Mn8CA8ps6yghLH/Hw8UPdqg4OLmFW3IFlcXnQNmo/dh8HzXYIQ==}
     engines: {node: '>=18'}
 
-  '@types/adm-zip@0.5.8':
-    resolution: {integrity: sha512-RVVH7QvZYbN+ihqZ4kX/dMiowf6o+Jk1fNwiSdx0NahBJLU787zkULhGhJM8mf/obmLGmgdMM0bXsQTmyfbR7Q==}
+  '@types/adm-zip@0.6.0':
+    resolution: {integrity: sha512-4BJwT30zsKqyYk+PgJS+LQzVrLh0bHragg9etHGg679uuBbNDbSaLsJy+DaJQZM8AvESHB+t3ruVzbrn6BUsMQ==}
+    deprecated: This is a stub types definition. adm-zip provides its own type definitions, so you do not need this installed.
 
   '@types/http-cache-semantics@4.0.4':
     resolution: {integrity: sha512-1m0bIFVc7eJWyve9S0RnuRgcQqF/Xd5QsUZAZeQFr1Q3/p9JWoQQEqmVy+DPTNpGXwhgIetAoYF8JSc33q29QA==}
@@ -1008,9 +1009,9 @@ snapshots:
 
   '@sindresorhus/merge-streams@4.0.0': {}
 
-  '@types/adm-zip@0.5.8':
+  '@types/adm-zip@0.6.0':
     dependencies:
-      '@types/node': 26.6.5
+      adm-zip: 0.6.1
 
   '@types/http-cache-semantics@4.0.4': {}
 
